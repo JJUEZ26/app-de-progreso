@@ -5,11 +5,17 @@
 // --- 1. CONFIGURACIÓN Y MODELO DE DATOS ---
 
 const KEYS = {
+    GOALS: "writerDashboard_goals",
+    CURRENT_GOAL_ID: "writerDashboard_current_goal_id",
+    SESSIONS: "writerDashboard_sessions_by_goal"
+};
+
+const LEGACY_KEYS = {
     GOAL: "writerDashboard_goal",
     SESSIONS: "writerDashboard_sessions"
 };
 
-const LEGACY_KEYS = {
+const LEGACY_PROJECT_KEYS = {
     GOAL: "writerDashboard_project",
     SESSIONS: "writerDashboard_sessions_proj_001"
 };
@@ -18,6 +24,8 @@ const DEFAULT_GOAL = {
     id: "goal_default",
     title: "Mi Nueva Meta",
     name: "Mi Nueva Meta",
+    type: "generic",
+    paceMode: "pace",
     targetValue: 50000,
     target: 50000,
     mode: "units",
@@ -34,10 +42,16 @@ const DEFAULT_GOAL = {
     }
 };
 
+let goals = [];
+let currentGoalId = DEFAULT_GOAL.id;
 let currentGoal = normalizeGoal(DEFAULT_GOAL);
 let sessions = [];
+let sessionsByGoalId = {};
+let smartIntentText = "";
+let wizardMode = "edit";
 
 const DEFAULT_WIZARD_STATE = {
+    smartIntentText: "",
     intentText: "",
     title: "",
     category: "generic",
@@ -45,11 +59,19 @@ const DEFAULT_WIZARD_STATE = {
     paceMode: "",
     deadlineDays: 0,
     bookTitle: "",
+    topicTitle: "",
+    habitTitle: "",
+    habitFrequency: "",
+    preferredTime: "",
+    daysPerWeekCount: 0,
+    hasPresetDays: false,
+    hasPresetMinutes: false,
+    hasPresetDeadline: false,
+    hasPresetBook: false,
     unitSelection: "",
     targetValue: 0,
     pageCount: 0,
     pagesUnknown: false,
-    timeTargetHours: 0,
     daysPerWeek: [1, 2, 3, 4, 5],
     minutesPerSession: 60,
     rateValuePerHour: 20
@@ -76,6 +98,10 @@ const dom = {
     weeklyTime: document.getElementById("weekly-time"),
     weeklyUnits: document.getElementById("weekly-units"),
     weeklyUnitsLabel: document.getElementById("weekly-units-label"),
+
+    smartIntentInput: document.getElementById("smart-intent-input"),
+    btnSmartContinue: document.getElementById("btn-smart-continue"),
+    smartCreateMessage: document.getElementById("smart-create-message"),
 
     btnLogSession: document.getElementById("btn-log-session"),
     btnExplore: document.getElementById("btn-explore-scenarios"),
@@ -104,6 +130,8 @@ const dom = {
 function normalizeGoal(rawGoal = {}) {
     const mode = rawGoal.mode || DEFAULT_GOAL.mode;
     const title = rawGoal.title || rawGoal.name || DEFAULT_GOAL.title;
+    const type = rawGoal.type || DEFAULT_GOAL.type;
+    const paceMode = rawGoal.paceMode || DEFAULT_GOAL.paceMode;
     const rawTargetValue = Number(rawGoal.targetValue ?? rawGoal.target ?? DEFAULT_GOAL.targetValue);
     const targetValue = Number.isFinite(rawTargetValue) ? rawTargetValue : DEFAULT_GOAL.targetValue;
     const rawUnitName = rawGoal.unitName || (mode === "time" ? "horas" : DEFAULT_GOAL.unitName);
@@ -123,6 +151,8 @@ function normalizeGoal(rawGoal = {}) {
         id: rawGoal.id || DEFAULT_GOAL.id,
         title,
         name: title,
+        type,
+        paceMode,
         targetValue,
         target: targetValue,
         mode,
@@ -140,36 +170,45 @@ function normalizeGoal(rawGoal = {}) {
 }
 
 function migrateStorageIfNeeded() {
-    const hasGoal = localStorage.getItem(KEYS.GOAL);
+    const hasGoals = localStorage.getItem(KEYS.GOALS);
     const hasSessions = localStorage.getItem(KEYS.SESSIONS);
 
-    if (!hasGoal) {
+    if (!hasGoals) {
         const legacyGoalStr = localStorage.getItem(LEGACY_KEYS.GOAL);
-        if (legacyGoalStr) {
-            try {
-                const legacyGoal = JSON.parse(legacyGoalStr);
-                const migratedGoal = normalizeGoal({
-                    title: legacyGoal.name || DEFAULT_GOAL.title,
-                    targetValue: legacyGoal.targetWords || DEFAULT_GOAL.targetValue,
+        const legacyProjectStr = localStorage.getItem(LEGACY_PROJECT_KEYS.GOAL);
+        const rawGoalStr = legacyGoalStr || legacyProjectStr;
+
+        try {
+            const legacyGoal = rawGoalStr ? JSON.parse(rawGoalStr) : null;
+            const baseGoal = legacyGoal
+                ? normalizeGoal({
+                    id: legacyGoal.id || DEFAULT_GOAL.id,
+                    title: legacyGoal.title || legacyGoal.name || DEFAULT_GOAL.title,
+                    targetValue: legacyGoal.targetValue ?? legacyGoal.targetWords ?? DEFAULT_GOAL.targetValue,
                     plan: {
-                        daysPerWeek: legacyGoal.schedule?.workDays || DEFAULT_GOAL.plan.daysPerWeek,
+                        daysPerWeek: legacyGoal.plan?.daysPerWeek || legacyGoal.schedule?.workDays || DEFAULT_GOAL.plan.daysPerWeek,
                         minutesPerSession: Math.round(
-                            (legacyGoal.schedule?.hoursPerSession || DEFAULT_GOAL.plan.minutesPerSession / 60) * 60
+                            (legacyGoal.plan?.minutesPerSession || legacyGoal.schedule?.hoursPerSession || DEFAULT_GOAL.plan.minutesPerSession / 60) * 60
                         )
                     },
                     rate: {
-                        valuePerHour: legacyGoal.schedule?.wordsPerHour || DEFAULT_GOAL.rate.valuePerHour
+                        valuePerHour: legacyGoal.rate?.valuePerHour || legacyGoal.schedule?.wordsPerHour || DEFAULT_GOAL.rate.valuePerHour
                     }
-                });
-                localStorage.setItem(KEYS.GOAL, JSON.stringify(migratedGoal));
-            } catch (error) {
-                console.error(error);
-            }
+                })
+                : normalizeGoal(DEFAULT_GOAL);
+
+            localStorage.setItem(KEYS.GOALS, JSON.stringify([baseGoal]));
+            localStorage.setItem(KEYS.CURRENT_GOAL_ID, baseGoal.id);
+        } catch (error) {
+            console.error(error);
+            localStorage.setItem(KEYS.GOALS, JSON.stringify([normalizeGoal(DEFAULT_GOAL)]));
+            localStorage.setItem(KEYS.CURRENT_GOAL_ID, DEFAULT_GOAL.id);
         }
     }
 
     if (!hasSessions) {
-        const legacySessionsStr = localStorage.getItem(LEGACY_KEYS.SESSIONS);
+        const legacySessionsStr = localStorage.getItem(LEGACY_KEYS.SESSIONS)
+            || localStorage.getItem(LEGACY_PROJECT_KEYS.SESSIONS);
         if (legacySessionsStr) {
             try {
                 const legacySessions = JSON.parse(legacySessionsStr);
@@ -178,11 +217,12 @@ function migrateStorageIfNeeded() {
                         id: session.id || Date.now(),
                         date: session.date || new Date().toISOString().split("T")[0],
                         minutes: Number(session.minutes) || 0,
-                        value: session.words ?? null,
-                        isEstimated: false
+                        value: session.words ?? session.value ?? null,
+                        isEstimated: Boolean(session.isEstimated)
                     }))
                     : [];
-                localStorage.setItem(KEYS.SESSIONS, JSON.stringify(migratedSessions));
+                const goalId = localStorage.getItem(KEYS.CURRENT_GOAL_ID) || DEFAULT_GOAL.id;
+                localStorage.setItem(KEYS.SESSIONS, JSON.stringify({ [goalId]: migratedSessions }));
             } catch (error) {
                 console.error(error);
             }
@@ -190,54 +230,79 @@ function migrateStorageIfNeeded() {
     }
 }
 
+function normalizeSessions(sessionList) {
+    if (!Array.isArray(sessionList)) return [];
+    return sessionList.map((session) => ({
+        id: session.id || Date.now(),
+        date: session.date || new Date().toISOString().split("T")[0],
+        minutes: Number(session.minutes) || 0,
+        value: typeof session.value === "number" ? session.value : session.value ?? null,
+        isEstimated: Boolean(session.isEstimated)
+    }));
+}
+
 function loadData() {
-    const goalStr = localStorage.getItem(KEYS.GOAL);
-    if (!goalStr) {
-        currentGoal = normalizeGoal(DEFAULT_GOAL);
+    const goalsStr = localStorage.getItem(KEYS.GOALS);
+    if (!goalsStr) {
+        goals = [normalizeGoal(DEFAULT_GOAL)];
     } else {
         try {
-            const parsed = JSON.parse(goalStr);
-            currentGoal = normalizeGoal(parsed);
+            const parsed = JSON.parse(goalsStr);
+            goals = Array.isArray(parsed) ? parsed.map((goal) => normalizeGoal(goal)) : [normalizeGoal(DEFAULT_GOAL)];
         } catch (error) {
             console.error(error);
-            currentGoal = normalizeGoal(DEFAULT_GOAL);
+            goals = [normalizeGoal(DEFAULT_GOAL)];
         }
     }
+
+    const storedGoalId = localStorage.getItem(KEYS.CURRENT_GOAL_ID);
+    currentGoalId = goals.some((goal) => goal.id === storedGoalId) ? storedGoalId : goals[0].id;
+    currentGoal = normalizeGoal(goals.find((goal) => goal.id === currentGoalId));
 
     const sessionsStr = localStorage.getItem(KEYS.SESSIONS);
     if (sessionsStr) {
         try {
             const parsedSessions = JSON.parse(sessionsStr);
-            sessions = Array.isArray(parsedSessions)
-                ? parsedSessions.map((session) => ({
-                    id: session.id || Date.now(),
-                    date: session.date || new Date().toISOString().split("T")[0],
-                    minutes: Number(session.minutes) || 0,
-                    value: typeof session.value === "number" ? session.value : session.value ?? null,
-                    isEstimated: Boolean(session.isEstimated)
-                }))
-                : [];
+            if (Array.isArray(parsedSessions)) {
+                sessionsByGoalId = { [currentGoalId]: parsedSessions };
+            } else {
+                sessionsByGoalId = typeof parsedSessions === "object" && parsedSessions !== null ? parsedSessions : {};
+            }
         } catch (error) {
             console.error(error);
-            sessions = [];
+            sessionsByGoalId = {};
         }
     } else {
-        sessions = [];
+        sessionsByGoalId = {};
     }
+
+    Object.keys(sessionsByGoalId).forEach((goalId) => {
+        sessionsByGoalId[goalId] = normalizeSessions(sessionsByGoalId[goalId]);
+    });
+    sessions = normalizeSessions(sessionsByGoalId[currentGoalId]);
 }
 
 function saveData() {
-    localStorage.setItem(KEYS.GOAL, JSON.stringify(currentGoal));
-    localStorage.setItem(KEYS.SESSIONS, JSON.stringify(sessions));
+    const existingIndex = goals.findIndex((goal) => goal.id === currentGoal.id);
+    if (existingIndex >= 0) {
+        goals[existingIndex] = currentGoal;
+    } else {
+        goals.push(currentGoal);
+    }
+    sessionsByGoalId[currentGoal.id] = sessions;
+
+    localStorage.setItem(KEYS.GOALS, JSON.stringify(goals));
+    localStorage.setItem(KEYS.CURRENT_GOAL_ID, currentGoal.id);
+    localStorage.setItem(KEYS.SESSIONS, JSON.stringify(sessionsByGoalId));
 }
 
 // --- 4. LÓGICA DE NEGOCIO (Cálculos) ---
 
-function getStats(goal = currentGoal) {
+function getStats(goal = currentGoal, sessionsList = sessions) {
     let totalUnits = 0;
     let totalMinutes = 0;
 
-    sessions.forEach((session) => {
+    sessionsList.forEach((session) => {
         totalMinutes += session.minutes;
 
         if (goal.mode === "time") {
@@ -368,27 +433,106 @@ function summarizeIntent(intentText, maxWords = 8) {
     return filtered.slice(0, maxWords).join(" ");
 }
 
-function inferCategory(intentText) {
+function classifyIntent(intentText) {
     const normalized = stripAccents(intentText.toLowerCase());
     const hasKeyword = (keywords) => keywords.some((keyword) => normalized.includes(keyword));
 
     if (hasKeyword(["leer", "libro", "novela", "autor"])) {
         return "reading";
     }
-    if (hasKeyword(["cancion", "canción", "piano", "guitarra"])) {
-        return "music";
+    if (hasKeyword(["correr", "caminar", "km", "entrenar"])) {
+        return "fitness";
     }
-    if (hasKeyword(["estudiar", "examen", "curso"])) {
+    if (hasKeyword(["estudiar", "examen", "curso", "clase"])) {
         return "study";
     }
-    if (hasKeyword(["correr", "km", "gym", "entrenar", "caminar"])) {
-        return "fitness";
+    if (hasKeyword(["cada dia", "cada día", "todos los dias", "todos los días", "hábito", "habito"])) {
+        return "habit";
     }
     return "generic";
 }
 
-function calculateEtaDays(goal, paceModifier = 1, sessionsOverride = null) {
-    const stats = getStats(goal);
+function extractNumberMatch(text, regex) {
+    const match = text.match(regex);
+    if (!match) return 0;
+    const value = Number(match[1].replace(",", "."));
+    return Number.isFinite(value) ? value : 0;
+}
+
+function buildDaysFromCount(count) {
+    const dayOrder = [1, 2, 3, 4, 5, 6, 0];
+    return dayOrder.slice(0, Math.min(count, dayOrder.length));
+}
+
+function parseIntent(text) {
+    const normalized = stripAccents(text.toLowerCase());
+    const category = classifyIntent(text);
+    const daysMatch = extractNumberMatch(normalized, /(\d+)\s*dias?/);
+    const hoursMatch = extractNumberMatch(normalized, /(\d+(?:[.,]\d+)?)\s*horas?/);
+    const minutesMatch = extractNumberMatch(normalized, /(\d+)\s*min/);
+    const timesPerWeekMatch = extractNumberMatch(normalized, /(\d+)\s*veces\s*(por|a la)\s*semana/);
+    const daysPerWeekMatch = extractNumberMatch(normalized, /(\d+)\s*dias?\s*(por|a la)\s*semana/);
+    const dailyMention = ["cada dia", "cada día", "todos los dias", "todos los días", "diario", "diaria", "diarias"]
+        .some((keyword) => normalized.includes(keyword));
+
+    let bookTitle = "";
+    if (category === "reading") {
+        const bookMatch = text.match(/(?:leer|terminar)\s+(.+?)(?:\s+en\s+\d+\s*d[ií]as|\s*$)/i);
+        if (bookMatch) {
+            bookTitle = bookMatch[1].trim();
+        }
+    }
+
+    let topicTitle = "";
+    if (category === "study") {
+        const topicMatch = text.match(/estudiar\s+(.+?)(?:\s+\d+|$)/i);
+        if (topicMatch) {
+            topicTitle = topicMatch[1].trim();
+        }
+    }
+
+    let habitTitle = "";
+    if (category === "habit") {
+        const habitMatch = text.match(/(?:hábito|habito|hacer|mantener)\s+(.+?)(?:\s+cada|\s*$)/i);
+        if (habitMatch) {
+            habitTitle = habitMatch[1].trim();
+        }
+    }
+
+    const minutesPerSession = minutesMatch > 0 ? minutesMatch : (hoursMatch > 0 ? Math.round(hoursMatch * 60) : 0);
+    let daysPerWeek = [];
+    let daysPerWeekCount = 0;
+    let habitFrequency = "";
+
+    if (dailyMention) {
+        daysPerWeek = [1, 2, 3, 4, 5, 6, 0];
+        daysPerWeekCount = 7;
+        habitFrequency = "daily";
+    } else if (timesPerWeekMatch > 0) {
+        daysPerWeekCount = timesPerWeekMatch;
+        daysPerWeek = buildDaysFromCount(daysPerWeekCount);
+        habitFrequency = "times";
+    } else if (daysPerWeekMatch > 0) {
+        daysPerWeekCount = daysPerWeekMatch;
+        daysPerWeek = buildDaysFromCount(daysPerWeekCount);
+    }
+
+    return {
+        category,
+        bookTitle,
+        topicTitle,
+        habitTitle,
+        minutesPerSession,
+        daysPerWeek,
+        daysPerWeekCount,
+        habitFrequency,
+        paceMode: daysMatch > 0 ? "deadline" : "",
+        deadlineDays: daysMatch > 0 ? daysMatch : 0
+    };
+}
+
+function calculateEtaDays(goal, paceModifier = 1, sessionsOverride = null, sessionsList = sessions) {
+    const stats = getStats(goal, sessionsList);
     const remainingUnits = goal.targetValue - stats.totalUnits;
 
     if (remainingUnits <= 0) {
@@ -533,16 +677,9 @@ const WIZARD_STEP_INTENT = {
     subtitle: "Describe tu meta en una frase.",
     inputType: "text",
     key: "intentText",
-    placeholder: "Quiero leer La Peste de Camus",
-    multiline: true
-};
-
-const WIZARD_STEP_DAYS = {
-    id: "days-per-week",
-    title: "¿Qué días puedes avanzar?",
-    subtitle: "Selecciona los días que planeas dedicarle.",
-    inputType: "days",
-    key: "daysPerWeek"
+    placeholder: "Ej: Quiero terminar La Peste en 15 días",
+    multiline: true,
+    condition: (state) => !state.intentText
 };
 
 const WIZARD_STEP_MINUTES = {
@@ -550,56 +687,41 @@ const WIZARD_STEP_MINUTES = {
     title: "¿Cuánto tiempo por sesión?",
     inputType: "chips",
     key: "minutesPerSession",
-    options: WIZARD_MINUTES_OPTIONS
+    options: WIZARD_MINUTES_OPTIONS,
+    condition: (state) => !state.hasPresetMinutes
 };
 
-const GENERIC_STEPS = [
-    WIZARD_STEP_INTENT,
-    {
-        id: "generic-unit",
-        title: "¿Cómo quieres medir tu meta?",
-        inputType: "chips",
-        key: "unitSelection",
-        options: [
-            { label: "Páginas", value: "páginas" },
-            { label: "Km", value: "km" },
-            { label: "Sesiones", value: "sesiones" },
-            { label: "Horas", value: "horas" }
-        ]
-    },
-    {
-        id: "generic-target",
-        title: "¿Cuánto quieres completar en total?",
-        inputType: "number",
-        key: "targetValue",
-        placeholder: "Ej: 20",
-        condition: (state) => Boolean(state.unitSelection)
-    },
-    WIZARD_STEP_DAYS,
-    WIZARD_STEP_MINUTES
-];
+const WIZARD_STEP_SUMMARY = {
+    id: "summary",
+    title: "Listo, este es tu plan base.",
+    subtitle: "Podrás ajustarlo después si lo necesitas.",
+    inputType: "summary",
+    key: "summary"
+};
 
 const WIZARD_TEMPLATES = {
     reading: {
         steps: [
             WIZARD_STEP_INTENT,
             {
-                id: "reading-mode",
-                title: "¿Quieres terminar en una fecha o a tu ritmo?",
-                inputType: "chips",
-                key: "paceMode",
-                options: [
-                    { label: "En X días", value: "deadline" },
-                    { label: "A mi ritmo", value: "pace" }
-                ]
-            },
-            {
                 id: "reading-book",
                 title: "¿Qué libro quieres leer?",
                 inputType: "text",
                 key: "bookTitle",
                 placeholder: "Ej: La Peste",
-                multiline: false
+                multiline: false,
+                condition: (state) => !state.bookTitle
+            },
+            {
+                id: "reading-mode",
+                title: "¿Quieres terminarlo en una fecha o ir a tu ritmo?",
+                inputType: "chips",
+                key: "paceMode",
+                options: [
+                    { label: "Terminar en X días", value: "deadline" },
+                    { label: "A mi ritmo", value: "pace" }
+                ],
+                condition: (state) => !state.paceMode
             },
             {
                 id: "reading-deadline",
@@ -607,21 +729,16 @@ const WIZARD_TEMPLATES = {
                 inputType: "number",
                 key: "deadlineDays",
                 placeholder: "Ej: 30",
-                condition: (state) => state.paceMode === "deadline"
+                condition: (state) => state.paceMode === "deadline" && state.deadlineDays <= 0
             },
             {
                 id: "reading-days",
-                title: "¿Cuántos días a la semana puedes leer?",
+                title: "¿Qué días puedes leer?",
                 inputType: "days",
-                key: "daysPerWeek"
+                key: "daysPerWeek",
+                condition: (state) => !state.hasPresetDays
             },
-            {
-                id: "reading-minutes",
-                title: "¿Cuánto tiempo por sesión?",
-                inputType: "chips",
-                key: "minutesPerSession",
-                options: WIZARD_MINUTES_OPTIONS
-            },
+            WIZARD_STEP_MINUTES,
             {
                 id: "reading-pages",
                 title: "¿Cuántas páginas tiene?",
@@ -630,31 +747,164 @@ const WIZARD_TEMPLATES = {
                 key: "pageCount",
                 placeholder: "Ej: 320",
                 required: false,
-                options: [{ label: "No lo sé", value: "unknown" }]
+                options: [{ label: "No lo sé", value: "unknown" }],
+                condition: (state) => state.paceMode !== "deadline" && !state.pageCount
             },
-            {
-                id: "reading-hours",
-                title: "¿Cuántas horas en total quieres dedicar?",
-                inputType: "number",
-                key: "timeTargetHours",
-                placeholder: "Ej: 12",
-                condition: (state) => state.pageCount <= 0
-            }
+            WIZARD_STEP_SUMMARY
         ]
     },
-    study: { steps: GENERIC_STEPS },
-    fitness: { steps: GENERIC_STEPS },
-    music: { steps: GENERIC_STEPS },
-    generic: { steps: GENERIC_STEPS }
+    study: {
+        steps: [
+            WIZARD_STEP_INTENT,
+            {
+                id: "study-topic",
+                title: "¿Qué tema quieres estudiar?",
+                inputType: "text",
+                key: "topicTitle",
+                placeholder: "Ej: Microeconomía",
+                multiline: false,
+                condition: (state) => !state.topicTitle
+            },
+            {
+                id: "study-days",
+                title: "¿Cuántos días a la semana puedes estudiar?",
+                inputType: "chips",
+                key: "daysPerWeekCount",
+                options: [
+                    { label: "2 días", value: 2 },
+                    { label: "3 días", value: 3 },
+                    { label: "4 días", value: 4 },
+                    { label: "5 días", value: 5 },
+                    { label: "6 días", value: 6 },
+                    { label: "7 días", value: 7 }
+                ],
+                condition: (state) => !state.hasPresetDays
+            },
+            WIZARD_STEP_MINUTES,
+            WIZARD_STEP_SUMMARY
+        ]
+    },
+    habit: {
+        steps: [
+            WIZARD_STEP_INTENT,
+            {
+                id: "habit-title",
+                title: "¿Qué hábito quieres mantener?",
+                inputType: "text",
+                key: "habitTitle",
+                placeholder: "Ej: Meditar",
+                multiline: false,
+                condition: (state) => !state.habitTitle
+            },
+            {
+                id: "habit-frequency",
+                title: "¿Con qué frecuencia?",
+                inputType: "chips",
+                key: "habitFrequency",
+                options: [
+                    { label: "Diario", value: "daily" },
+                    { label: "3 veces por semana", value: "three" },
+                    { label: "Personalizado", value: "custom" }
+                ],
+                condition: (state) => !state.habitFrequency
+            },
+            {
+                id: "habit-days",
+                title: "¿Qué días te gustaría hacerlo?",
+                inputType: "days",
+                key: "daysPerWeek",
+                condition: (state) => state.habitFrequency === "custom"
+            },
+            WIZARD_STEP_MINUTES,
+            {
+                id: "habit-time",
+                title: "¿En qué horario te gustaría hacerlo?",
+                subtitle: "Opcional",
+                inputType: "text",
+                key: "preferredTime",
+                placeholder: "Ej: Por la mañana",
+                multiline: false,
+                required: false
+            },
+            WIZARD_STEP_SUMMARY
+        ]
+    },
+    fitness: {
+        steps: [
+            WIZARD_STEP_INTENT,
+            {
+                id: "fitness-activity",
+                title: "¿Qué actividad quieres hacer?",
+                inputType: "text",
+                key: "title",
+                placeholder: "Ej: Correr",
+                multiline: false,
+                condition: (state) => !state.title
+            },
+            {
+                id: "fitness-target",
+                title: "¿Cuántos km quieres recorrer?",
+                inputType: "number",
+                key: "targetValue",
+                placeholder: "Ej: 10"
+            },
+            {
+                id: "fitness-days",
+                title: "¿Qué días puedes entrenar?",
+                inputType: "days",
+                key: "daysPerWeek",
+                condition: (state) => !state.hasPresetDays
+            },
+            WIZARD_STEP_MINUTES,
+            WIZARD_STEP_SUMMARY
+        ]
+    },
+    generic: {
+        steps: [
+            WIZARD_STEP_INTENT,
+            {
+                id: "generic-unit",
+                title: "¿Cómo prefieres medir tu meta?",
+                inputType: "chips",
+                key: "unitSelection",
+                options: [
+                    { label: "Páginas", value: "páginas" },
+                    { label: "Km", value: "km" },
+                    { label: "Sesiones", value: "sesiones" },
+                    { label: "Horas", value: "horas" }
+                ]
+            },
+            {
+                id: "generic-target",
+                title: "¿Cuánto quieres completar?",
+                inputType: "number",
+                key: "targetValue",
+                placeholder: "Ej: 20",
+                condition: (state) => Boolean(state.unitSelection)
+            },
+            {
+                id: "generic-days",
+                title: "¿Qué días puedes avanzar?",
+                subtitle: "Selecciona los días que planeas dedicarle.",
+                inputType: "days",
+                key: "daysPerWeek",
+                condition: (state) => !state.hasPresetDays
+            },
+            WIZARD_STEP_MINUTES,
+            WIZARD_STEP_SUMMARY
+        ]
+    }
 };
 
 function buildWizardStateFromGoal(goal) {
     const intentText = goal.title || "";
-    const category = inferCategory(intentText);
+    const category = goal.type || classifyIntent(intentText);
     const isReading = category === "reading";
     const unitSelection = goal.mode === "time" ? "horas" : goal.unitName;
     const pageCount = isReading && goal.mode !== "time" && goal.unitName === "páginas" ? goal.targetValue : 0;
-    const timeTargetHours = goal.mode === "time" ? goal.targetValue : 0;
+    const habitFrequency = goal.plan?.daysPerWeek?.length === 7 ? "daily" : "";
+    const habitTitle = category === "habit" ? (goal.title || "").replace(/^Hábito:\s*/i, "") : "";
+    const topicTitle = category === "study" ? (goal.title || "").replace(/^Estudiar:\s*/i, "") : "";
 
     return {
         ...DEFAULT_WIZARD_STATE,
@@ -662,10 +912,13 @@ function buildWizardStateFromGoal(goal) {
         title: goal.title || "",
         category,
         templateKey: category,
+        paceMode: goal.paceMode || DEFAULT_WIZARD_STATE.paceMode,
         unitSelection: unitSelection || DEFAULT_WIZARD_STATE.unitSelection,
         targetValue: Number(goal.targetValue) || DEFAULT_WIZARD_STATE.targetValue,
         pageCount: Number(pageCount) || 0,
-        timeTargetHours: Number(timeTargetHours) || 0,
+        habitFrequency,
+        habitTitle,
+        topicTitle,
         pagesUnknown: isReading && goal.mode === "time",
         daysPerWeek: Array.isArray(goal.plan?.daysPerWeek)
             ? [...goal.plan.daysPerWeek]
@@ -700,7 +953,7 @@ function getUnitQuestion(unitName) {
     if (unit === "páginas") return "¿Cuántas páginas en total?";
     if (unit === "sesiones") return "¿Cuántas sesiones en total?";
     if (unit === "km") return "¿Cuántos km en total?";
-    return "¿Cuánto quieres completar en total?";
+    return "¿Cuánto quieres completar?";
 }
 
 function getWizardStepTitle(step) {
@@ -734,9 +987,14 @@ function isWizardStepValid(step) {
         case "number":
             return Number(value) > 0;
         case "chips":
+            if (typeof value === "number") {
+                return value > 0;
+            }
             return value !== undefined && value !== null && String(value).length > 0;
         case "days":
             return Array.isArray(value) && value.length > 0;
+        case "summary":
+            return true;
         default:
             return true;
     }
@@ -854,7 +1112,49 @@ function renderWizardInput(step) {
         `;
     }
 
+    if (step.inputType === "summary") {
+        return renderPlanSummary();
+    }
+
     return "";
+}
+
+function renderPlanSummary() {
+    const plan = buildSmartPlan();
+    const daysCount = plan.plan.daysPerWeek.length;
+    const frequencyLabel = daysCount === 7 ? "Todos los días" : `${daysCount} días por semana`;
+    const timeLabel = `${plan.plan.minutesPerSession} min por sesión`;
+    const totalLabel = plan.metric.unitName === "horas"
+        ? `${plan.metric.targetValue} horas en total`
+        : `${plan.metric.targetValue} ${plan.metric.unitName} en total`;
+    const modeLabel = plan.goal.mode === "deadline" && wizardState.deadlineDays > 0
+        ? `Terminar en ${wizardState.deadlineDays} días`
+        : "A tu ritmo";
+
+    return `
+        <div class="wizard-summary">
+            <div class="summary-item">
+                <span class="summary-label">Meta</span>
+                <span class="summary-value">${plan.goal.title}</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">Ritmo</span>
+                <span class="summary-value">${modeLabel}</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">Disponibilidad</span>
+                <span class="summary-value">${frequencyLabel}</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">Tiempo</span>
+                <span class="summary-value">${timeLabel}</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">Meta total</span>
+                <span class="summary-value">${totalLabel}</span>
+            </div>
+        </div>
+    `;
 }
 
 function updateWizardFlow({ rerenderStep = true } = {}) {
@@ -879,13 +1179,15 @@ function bindWizardStep(step) {
         input.addEventListener("input", (event) => {
             wizardState[step.key] = event.target.value.trim();
             if (step.key === "intentText") {
-                const nextCategory = inferCategory(wizardState.intentText);
+                const parsed = parseIntent(wizardState.intentText);
+                const nextCategory = parsed.category;
                 if (nextCategory !== wizardState.category) {
                     wizardState.category = nextCategory;
                     wizardState.templateKey = nextCategory;
                     updateWizardFlow();
                     return;
                 }
+                mergeIntentData(parsed);
             }
             updateWizardFlow({ rerenderStep: false });
         });
@@ -898,6 +1200,10 @@ function bindWizardStep(step) {
         input.addEventListener("input", (event) => {
             const value = Number(event.target.value);
             wizardState[step.key] = Number.isFinite(value) ? value : 0;
+            if (step.id === "reading-deadline" && wizardState[step.key] > 0) {
+                wizardState.hasPresetDeadline = true;
+                wizardState.paceMode = "deadline";
+            }
             if (step.id === "reading-pages") {
                 wizardState.pagesUnknown = wizardState[step.key] > 0 ? false : wizardState.pagesUnknown;
             }
@@ -932,6 +1238,23 @@ function bindWizardStep(step) {
                 const option = step.options?.find((opt) => String(opt.value) === rawValue);
                 const value = option ? option.value : rawValue;
                 wizardState[step.key] = value;
+                if (step.key === "daysPerWeekCount") {
+                    const count = Number(value);
+                    wizardState.daysPerWeekCount = Number.isFinite(count) ? count : 0;
+                    wizardState.daysPerWeek = buildDaysFromCount(wizardState.daysPerWeekCount);
+                    wizardState.hasPresetDays = true;
+                }
+                if (step.key === "habitFrequency") {
+                    if (value === "daily") {
+                        wizardState.daysPerWeek = [1, 2, 3, 4, 5, 6, 0];
+                        wizardState.hasPresetDays = true;
+                    } else if (value === "three") {
+                        wizardState.daysPerWeek = [1, 3, 5];
+                        wizardState.hasPresetDays = true;
+                    } else {
+                        wizardState.hasPresetDays = false;
+                    }
+                }
                 if (step.id === "reading-mode" && value === "pace") {
                     wizardState.deadlineDays = 0;
                 }
@@ -948,6 +1271,7 @@ function bindWizardStep(step) {
                 wizardState.daysPerWeek = Array.from(stepEl.querySelectorAll(".day-checkbox:checked")).map(
                     (chk) => parseInt(chk.value, 10)
                 );
+                wizardState.hasPresetDays = wizardState.daysPerWeek.length > 0;
                 updateWizardFlow({ rerenderStep: false });
             });
         });
@@ -963,54 +1287,176 @@ function moveWizardStep(direction) {
     }
 }
 
-function buildGoalFromWizardState() {
-    const summary = summarizeIntent(wizardState.intentText, 8);
-    const titleMap = {
-        reading: "Leer",
-        music: "Practicar",
-        study: "Estudiar",
-        fitness: "Entrenar",
-        generic: "Meta"
-    };
-    const prefix = titleMap[wizardState.category] ?? "Meta";
-    const baseTitle = summary ? `${prefix}: ${summary}` : DEFAULT_GOAL.title;
-    const title = wizardState.category === "reading" && wizardState.bookTitle
-        ? `Leer: ${wizardState.bookTitle}`
-        : baseTitle;
+function mergeIntentData(parsed) {
+    if (!wizardState.paceMode && parsed.paceMode) {
+        wizardState.paceMode = parsed.paceMode;
+    }
+    if (!wizardState.deadlineDays && parsed.deadlineDays) {
+        wizardState.deadlineDays = parsed.deadlineDays;
+        wizardState.hasPresetDeadline = true;
+    }
+    if (!wizardState.bookTitle && parsed.bookTitle) {
+        wizardState.bookTitle = parsed.bookTitle;
+        wizardState.hasPresetBook = true;
+    }
+    if (!wizardState.topicTitle && parsed.topicTitle) {
+        wizardState.topicTitle = parsed.topicTitle;
+    }
+    if (!wizardState.habitTitle && parsed.habitTitle) {
+        wizardState.habitTitle = parsed.habitTitle;
+    }
+    if (!wizardState.hasPresetMinutes && parsed.minutesPerSession) {
+        wizardState.minutesPerSession = parsed.minutesPerSession;
+        wizardState.hasPresetMinutes = true;
+    }
+    if (!wizardState.hasPresetDays && parsed.daysPerWeek.length) {
+        wizardState.daysPerWeek = parsed.daysPerWeek;
+        wizardState.daysPerWeekCount = parsed.daysPerWeekCount;
+        wizardState.hasPresetDays = true;
+        wizardState.habitFrequency = parsed.habitFrequency || wizardState.habitFrequency;
+    }
+}
 
+function buildTitleFromWizardState() {
+    const summary = summarizeIntent(wizardState.intentText, 6);
     if (wizardState.category === "reading") {
-        if (wizardState.pageCount > 0) {
-            return {
-                title,
-                mode: "units",
-                unitName: "páginas",
-                targetValue: wizardState.pageCount
-            };
+        return wizardState.bookTitle ? `Leer: ${wizardState.bookTitle}` : `Leer: ${summary || "Nuevo libro"}`;
+    }
+    if (wizardState.category === "study") {
+        const topic = wizardState.topicTitle || summary;
+        return topic ? `Estudiar: ${topic}` : "Estudiar";
+    }
+    if (wizardState.category === "habit") {
+        const habit = wizardState.habitTitle || summary;
+        return habit ? `Hábito: ${habit}` : "Nuevo hábito";
+    }
+    if (wizardState.category === "fitness") {
+        const activity = wizardState.title || summary;
+        return activity ? `Entrenar: ${activity}` : "Entrenar";
+    }
+    return summary ? `Meta: ${summary}` : DEFAULT_GOAL.title;
+}
+
+function buildSmartPlan(state = wizardState) {
+    const daysPerWeek = state.daysPerWeek.length ? state.daysPerWeek : DEFAULT_WIZARD_STATE.daysPerWeek;
+    const minutesPerSession = state.minutesPerSession || DEFAULT_WIZARD_STATE.minutesPerSession;
+    const timelineMode = state.paceMode || "pace";
+    const goalTitle = buildTitleFromWizardState();
+
+    let metricMode = "units";
+    let unitName = "sesiones";
+    let targetValue = state.targetValue || 12;
+
+    if (state.category === "reading") {
+        if (state.pageCount > 0) {
+            metricMode = "units";
+            unitName = "páginas";
+            targetValue = state.pageCount;
+        } else {
+            metricMode = "time";
+            unitName = "horas";
+            if (timelineMode === "deadline" && state.deadlineDays > 0) {
+                const weeks = Math.max(1, state.deadlineDays / 7);
+                targetValue = Math.max(1, Math.round((weeks * daysPerWeek.length * minutesPerSession) / 60));
+            } else {
+                targetValue = Math.max(1, Math.round((daysPerWeek.length * minutesPerSession) / 60 * 4));
+            }
         }
-        return {
-            title,
-            mode: "time",
-            unitName: "horas",
-            targetValue: wizardState.timeTargetHours
-        };
+    } else if (state.category === "study" || state.category === "habit") {
+        metricMode = "time";
+        unitName = "horas";
+        targetValue = Math.max(1, Math.round((daysPerWeek.length * minutesPerSession) / 60 * 4));
+    } else if (state.category === "fitness") {
+        metricMode = "units";
+        unitName = "km";
+        targetValue = state.targetValue || 10;
+    } else {
+        unitName = state.unitSelection || "sesiones";
+        metricMode = unitName === "horas" ? "time" : "units";
+        targetValue = state.targetValue || 12;
     }
 
-    const unitName = wizardState.unitSelection || "sesiones";
-    const isTime = unitName === "horas";
-    return {
-        title,
-        mode: isTime ? "time" : "units",
+    const tempGoal = normalizeGoal({
+        title: goalTitle,
+        mode: metricMode,
         unitName,
-        targetValue: wizardState.targetValue
+        targetValue,
+        plan: {
+            daysPerWeek,
+            minutesPerSession
+        }
+    });
+
+    const etaDays = calculateEtaDays(tempGoal, 1, null, []);
+    return {
+        goal: {
+            title: goalTitle,
+            type: state.category,
+            mode: timelineMode
+        },
+        metric: {
+            mode: metricMode,
+            unitName,
+            targetValue
+        },
+        plan: {
+            daysPerWeek,
+            minutesPerSession
+        },
+        estimatedETA: etaDays ? formatFutureDate(etaDays) : null,
+        deadline: timelineMode === "deadline" && state.deadlineDays > 0
+            ? formatFutureDate(state.deadlineDays)
+            : null,
+        progress: 0
     };
 }
 
-function openWizard() {
+function openSmartCreateWizard() {
+    const intent = dom.smartIntentInput?.value.trim() || "";
+    if (!intent) {
+        alert("Cuéntanos qué quieres lograr para continuar.");
+        return;
+    }
+    smartIntentText = intent;
+    if (dom.smartCreateMessage) {
+        dom.smartCreateMessage.classList.remove("is-visible");
+    }
+    dom.smartIntentInput.value = "";
+    openWizard({ mode: "create", intentText: smartIntentText });
+}
+
+function openWizard({ mode = "edit", intentText = "" } = {}) {
     dom.modalProject.classList.remove("hidden");
-    wizardState = buildWizardStateFromGoal(currentGoal);
-    if (isDefaultGoal(currentGoal)) {
-        wizardState.intentText = "";
-        wizardState.title = "";
+    wizardMode = mode;
+    updateSmartCreateMessage(false);
+    if (mode === "create") {
+        const parsed = parseIntent(intentText);
+        wizardState = {
+            ...DEFAULT_WIZARD_STATE,
+            intentText,
+            smartIntentText: intentText,
+            category: parsed.category,
+            templateKey: parsed.category,
+            bookTitle: parsed.bookTitle || "",
+            topicTitle: parsed.topicTitle || "",
+            habitTitle: parsed.habitTitle || "",
+            paceMode: parsed.paceMode || "",
+            deadlineDays: parsed.deadlineDays || 0,
+            daysPerWeek: parsed.daysPerWeek.length ? parsed.daysPerWeek : [...DEFAULT_WIZARD_STATE.daysPerWeek],
+            daysPerWeekCount: parsed.daysPerWeekCount || 0,
+            minutesPerSession: parsed.minutesPerSession || DEFAULT_WIZARD_STATE.minutesPerSession,
+            habitFrequency: parsed.habitFrequency || "",
+            hasPresetDays: parsed.daysPerWeek.length > 0,
+            hasPresetMinutes: parsed.minutesPerSession > 0,
+            hasPresetDeadline: parsed.deadlineDays > 0,
+            hasPresetBook: parsed.bookTitle.length > 0
+        };
+    } else {
+        wizardState = buildWizardStateFromGoal(currentGoal);
+        if (isDefaultGoal(currentGoal)) {
+            wizardState.intentText = "";
+            wizardState.title = "";
+        }
     }
     wizardStepIndex = 0;
     updateWizardFlow();
@@ -1021,30 +1467,51 @@ function closeWizard() {
 }
 
 function saveWizardGoal() {
-    const goalBase = buildGoalFromWizardState();
-    const finalRate = goalBase.mode === "time"
+    const smartPlan = buildSmartPlan();
+    const finalRate = smartPlan.metric.mode === "time"
         ? currentGoal.rate.valuePerHour
         : wizardState.rateValuePerHour || DEFAULT_WIZARD_STATE.rateValuePerHour;
 
-    currentGoal = normalizeGoal({
-        ...currentGoal,
-        title: goalBase.title,
-        mode: goalBase.mode,
-        unitName: goalBase.unitName,
-        targetValue: goalBase.targetValue,
-        plan: {
-            daysPerWeek: wizardState.daysPerWeek,
-            minutesPerSession: wizardState.minutesPerSession
-        },
+    const goalPayload = normalizeGoal({
+        id: wizardMode === "create" ? `goal_${Date.now()}` : currentGoal.id,
+        title: smartPlan.goal.title,
+        type: smartPlan.goal.type,
+        paceMode: smartPlan.goal.mode,
+        mode: smartPlan.metric.mode,
+        unitName: smartPlan.metric.unitName,
+        targetValue: smartPlan.metric.targetValue,
+        plan: smartPlan.plan,
         rate: {
             valuePerHour: finalRate
         }
     });
 
+    if (wizardMode === "create") {
+        goals.push(goalPayload);
+        sessionsByGoalId[goalPayload.id] = [];
+        currentGoal = goalPayload;
+        currentGoalId = goalPayload.id;
+        sessions = [];
+    } else {
+        currentGoal = normalizeGoal({ ...currentGoal, ...goalPayload });
+    }
+
     saveData();
     renderDashboard();
     renderScenarios();
+    updateSmartCreateMessage(wizardMode === "create");
     closeWizard();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function updateSmartCreateMessage(showMessage) {
+    if (!dom.smartCreateMessage) return;
+    if (!showMessage) {
+        dom.smartCreateMessage.classList.remove("is-visible");
+        return;
+    }
+    dom.smartCreateMessage.textContent = "Listo, este es tu plan base. Podrás ajustarlo después si lo necesitas.";
+    dom.smartCreateMessage.classList.add("is-visible");
 }
 
 // --- 8. INICIALIZACIÓN ---
@@ -1060,7 +1527,10 @@ function initApp() {
     dom.btnCancelSession.addEventListener("click", closeLogModal);
     dom.btnSaveSession.addEventListener("click", saveSession);
 
-    dom.btnOpenWizard.addEventListener("click", openWizard);
+    dom.btnOpenWizard.addEventListener("click", () => openWizard({ mode: "edit" }));
+    if (dom.btnSmartContinue) {
+        dom.btnSmartContinue.addEventListener("click", openSmartCreateWizard);
+    }
     dom.btnCloseProjectModal.addEventListener("click", closeWizard);
     dom.btnCancelProject.addEventListener("click", closeWizard);
     dom.btnWizardBack.addEventListener("click", () => moveWizardStep(-1));
