@@ -49,6 +49,11 @@ let sessions = [];
 let sessionsByGoalId = {};
 let smartIntentText = "";
 let wizardMode = "edit";
+let appState = {
+    view: "dashboard",
+    selectedGoalId: null,
+    dashboardMode: "vision"
+};
 
 const DEFAULT_WIZARD_STATE = {
     smartIntentText: "",
@@ -103,6 +108,11 @@ const dom = {
     btnSmartContinue: document.getElementById("btn-smart-continue"),
     smartCreateMessage: document.getElementById("smart-create-message"),
 
+    btnDashboardVision: document.getElementById("btn-dashboard-vision"),
+    btnDashboardToday: document.getElementById("btn-dashboard-today"),
+    dashboardVisionPanel: document.getElementById("dashboard-vision"),
+    dashboardTodayPanel: document.getElementById("dashboard-today"),
+
     btnLogSession: document.getElementById("btn-log-session"),
     btnExplore: document.getElementById("btn-explore-scenarios"),
     btnOpenWizard: document.getElementById("btn-open-project-wizard"),
@@ -132,6 +142,8 @@ function normalizeGoal(rawGoal = {}) {
     const title = rawGoal.title || rawGoal.name || DEFAULT_GOAL.title;
     const type = rawGoal.type || DEFAULT_GOAL.type;
     const paceMode = rawGoal.paceMode || DEFAULT_GOAL.paceMode;
+    const startDate = rawGoal.startDate || DEFAULT_GOAL.startDate;
+    const deadlineDate = rawGoal.deadlineDate || rawGoal.deadline || null;
     const rawTargetValue = Number(rawGoal.targetValue ?? rawGoal.target ?? DEFAULT_GOAL.targetValue);
     const targetValue = Number.isFinite(rawTargetValue) ? rawTargetValue : DEFAULT_GOAL.targetValue;
     const rawUnitName = rawGoal.unitName || (mode === "time" ? "horas" : DEFAULT_GOAL.unitName);
@@ -157,6 +169,8 @@ function normalizeGoal(rawGoal = {}) {
         target: targetValue,
         mode,
         unitName,
+        startDate,
+        deadlineDate,
         plan: {
             daysPerWeek: planDays,
             minutesPerSession: planMinutes
@@ -280,6 +294,7 @@ function loadData() {
         sessionsByGoalId[goalId] = normalizeSessions(sessionsByGoalId[goalId]);
     });
     sessions = normalizeSessions(sessionsByGoalId[currentGoalId]);
+    appState.selectedGoalId = currentGoalId;
 }
 
 function saveData() {
@@ -561,6 +576,217 @@ function calculateEtaDays(goal, paceModifier = 1, sessionsOverride = null, sessi
     return Math.ceil(weeksNeeded * 7);
 }
 
+function getGoalProgress(goal, sessionsForGoal = []) {
+    let totalMinutes = 0;
+    let totalValue = 0;
+
+    sessionsForGoal.forEach((session) => {
+        totalMinutes += session.minutes;
+
+        if (goal.mode === "time") {
+            totalValue += session.minutes / 60;
+            return;
+        }
+
+        if (typeof session.value === "number") {
+            totalValue += session.value;
+            return;
+        }
+
+        const rate = goal.rate?.valuePerHour ?? 0;
+        if (rate > 0 && session.minutes > 0) {
+            totalValue += Math.floor((session.minutes / 60) * rate);
+        }
+    });
+
+    let progressPercent = 0;
+    if (goal.mode === "time") {
+        if (goal.targetValue) {
+            progressPercent = (totalMinutes / (goal.targetValue * 60)) * 100;
+        } else {
+            const baseline = goal.plan.minutesPerSession * Math.max(1, goal.plan.daysPerWeek.length) * 4;
+            progressPercent = baseline > 0 ? (totalMinutes / baseline) * 100 : 0;
+        }
+    } else if (goal.targetValue) {
+        progressPercent = (totalValue / goal.targetValue) * 100;
+    } else {
+        progressPercent = Math.min(100, sessionsForGoal.length * 10);
+    }
+
+    return {
+        progressPercent: Math.min(100, Math.max(0, Math.round(progressPercent))),
+        totalMinutes,
+        totalValue
+    };
+}
+
+function getGoalStatus(goal, progressInfo, todayDate) {
+    const labels = {
+        "on-track": "En ruta",
+        "warning": "Un pequeño empujón",
+        "behind": "Vamos a rescatar esta meta"
+    };
+    const colors = {
+        "on-track": "status-on-track",
+        "warning": "status-warning",
+        "behind": "status-behind"
+    };
+
+    let status = "on-track";
+    let etaText = "A tu ritmo";
+
+    if (goal.deadlineDate) {
+        const startDate = new Date(`${goal.startDate || todayDate}T00:00:00`);
+        const deadlineDate = new Date(`${goal.deadlineDate}T00:00:00`);
+        const totalDays = Math.max(1, Math.round((deadlineDate - startDate) / 86400000));
+        const elapsedDays = Math.min(totalDays, Math.max(0, Math.round((todayDate - startDate) / 86400000)));
+        const expectedProgress = (elapsedDays / totalDays) * 100;
+
+        if (progressInfo.progressPercent >= expectedProgress - 5) {
+            status = "on-track";
+        } else if (progressInfo.progressPercent >= expectedProgress - 15) {
+            status = "warning";
+        } else {
+            status = "behind";
+        }
+
+        etaText = progressInfo.progressPercent >= 100
+            ? "Meta cumplida 🎉"
+            : `Terminas aprox el ${formatShortDate(goal.deadlineDate)}`;
+    } else {
+        const sessionsForGoal = sessionsByGoalId[goal.id] || [];
+        const lastSession = sessionsForGoal[0];
+        const plannedSessions = Math.max(1, goal.plan.daysPerWeek.length || 1);
+        const expectedGap = Math.max(1, Math.floor(7 / plannedSessions));
+        if (!lastSession) {
+            status = "warning";
+        } else {
+            const lastDate = new Date(`${lastSession.date}T00:00:00`);
+            const daysSince = Math.round((todayDate - lastDate) / 86400000);
+            if (daysSince > expectedGap * 2) {
+                status = "behind";
+            } else if (daysSince > expectedGap) {
+                status = "warning";
+            }
+        }
+    }
+
+    return {
+        status,
+        label: labels[status],
+        colorClass: colors[status],
+        etaText
+    };
+}
+
+function isTodayWorkDay(goal, todayDate) {
+    const planDays = goal.plan?.daysPerWeek;
+    if (!Array.isArray(planDays) || planDays.length === 0) {
+        return false;
+    }
+
+    const dayIndex = todayDate.getDay();
+    const letterMap = {
+        L: 1,
+        M: 2,
+        X: 3,
+        J: 4,
+        V: 5,
+        S: 6,
+        D: 0
+    };
+
+    return planDays.some((day) => {
+        if (typeof day === "number") {
+            const normalized = day === 7 ? 0 : day;
+            return normalized === dayIndex || (dayIndex === 0 && day === 0);
+        }
+        if (typeof day === "string") {
+            const key = day.trim().toUpperCase();
+            return letterMap[key] === dayIndex;
+        }
+        return false;
+    });
+}
+
+function getTodaySummaryForGoal(goal, sessionsForGoal, todayDate) {
+    const todayKey = todayDate.toISOString().split("T")[0];
+    const todaySessions = sessionsForGoal.filter((session) => session.date === todayKey);
+    const completedMinutes = todaySessions.reduce((acc, session) => acc + session.minutes, 0);
+    const isWorkDay = isTodayWorkDay(goal, todayDate);
+    const plannedMinutes = isWorkDay ? (goal.plan?.minutesPerSession || 0) : 0;
+    const remainingMinutes = Math.max(plannedMinutes - completedMinutes, 0);
+
+    let suggestionText = "Hoy es día libre para esta meta.";
+    if (isWorkDay) {
+        suggestionText = remainingMinutes > 0
+            ? `Te faltan ~${remainingMinutes} min para cumplir lo de hoy.`
+            : "Meta diaria cumplida 🎉";
+    }
+
+    return {
+        plannedMinutes,
+        completedMinutes,
+        remainingMinutes,
+        suggestionText
+    };
+}
+
+function getTodayItems(goalsList, sessionsMap, todayDate) {
+    return goalsList.map((goal) => {
+        const sessionsForGoal = sessionsMap[goal.id] || [];
+        const summary = getTodaySummaryForGoal(goal, sessionsForGoal, todayDate);
+        const progressInfo = getGoalProgress(goal, sessionsForGoal);
+        const status = getGoalStatus(goal, progressInfo, todayDate);
+
+        return {
+            goalId: goal.id,
+            goalTitle: goal.title,
+            type: goal.type,
+            status: status.status,
+            isTodayWorkDay: summary.plannedMinutes > 0,
+            plannedMinutes: summary.plannedMinutes,
+            completedMinutes: summary.completedMinutes,
+            remainingMinutes: summary.remainingMinutes,
+            suggestionText: summary.suggestionText
+        };
+    });
+}
+
+function formatShortDate(dateString) {
+    if (!dateString) return "";
+    const date = new Date(`${dateString}T00:00:00`);
+    return date.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" });
+}
+
+function getGoalTypeLabel(type) {
+    const map = {
+        reading: "📖 Lectura",
+        fitness: "🏃 Fitness",
+        study: "📚 Estudio",
+        habit: "✨ Hábito",
+        generic: "🎯 Meta"
+    };
+    return map[type] || "🎯 Meta";
+}
+
+function setCurrentGoalById(goalId) {
+    const targetGoal = goals.find((goal) => goal.id === goalId);
+    if (!targetGoal) return;
+    currentGoalId = goalId;
+    currentGoal = normalizeGoal(targetGoal);
+    sessions = normalizeSessions(sessionsByGoalId[goalId]);
+    appState.selectedGoalId = goalId;
+    localStorage.setItem(KEYS.CURRENT_GOAL_ID, goalId);
+    renderDashboard();
+    renderScenarios();
+}
+
+function setDashboardMode(mode) {
+    appState.dashboardMode = mode;
+    renderDashboardMode();
+}
+
 // --- 5. RENDERIZADO ---
 
 function renderDashboard() {
@@ -597,6 +823,130 @@ function renderDashboard() {
     dom.weeklyTime.textContent = `${(weeklyStats.totalMinutes / 60).toFixed(1).replace(/\\.0$/, "")}h`;
     dom.weeklyUnits.textContent = formatValue(weeklyStats.totalUnits);
     dom.weeklyUnitsLabel.textContent = unitLabel;
+
+    renderDashboardMode();
+}
+
+function renderDashboardMode() {
+    if (!dom.dashboardVisionPanel || !dom.dashboardTodayPanel) return;
+    const isVision = appState.dashboardMode === "vision";
+    dom.dashboardVisionPanel.classList.toggle("is-active", isVision);
+    dom.dashboardTodayPanel.classList.toggle("is-active", !isVision);
+    dom.btnDashboardVision?.classList.toggle("is-active", isVision);
+    dom.btnDashboardToday?.classList.toggle("is-active", !isVision);
+
+    if (isVision) {
+        renderVisionBoard();
+    } else {
+        renderTodayBoard();
+    }
+}
+
+function renderVisionBoard() {
+    const todayDate = new Date();
+    if (!goals.length) {
+        dom.dashboardVisionPanel.innerHTML = `<div class="empty-state">Crea tu primera meta para empezar.</div>`;
+        return;
+    }
+
+    const cards = goals.map((goal) => {
+        const goalSessions = sessionsByGoalId[goal.id] || [];
+        const progress = getGoalProgress(goal, goalSessions);
+        const status = getGoalStatus(goal, progress, todayDate);
+        const isSelected = appState.selectedGoalId === goal.id;
+
+        return `
+            <article class="card goal-card ${isSelected ? "is-selected" : ""}" data-goal-id="${goal.id}">
+                <div class="goal-card-header">
+                    <div>
+                        <div class="goal-type">${getGoalTypeLabel(goal.type)}</div>
+                        <h3>${goal.title}</h3>
+                    </div>
+                    <div class="goal-progress" style="--progress: ${progress.progressPercent};">
+                        ${progress.progressPercent}%
+                    </div>
+                </div>
+                <div class="goal-status ${status.colorClass}">
+                    ${status.label}
+                </div>
+                <div class="goal-eta">${status.etaText}</div>
+            </article>
+        `;
+    }).join("");
+
+    dom.dashboardVisionPanel.innerHTML = `<div class="vision-grid">${cards}</div>`;
+
+    dom.dashboardVisionPanel.querySelectorAll(".goal-card").forEach((card) => {
+        card.addEventListener("click", () => {
+            const goalId = card.getAttribute("data-goal-id");
+            if (goalId) {
+                setCurrentGoalById(goalId);
+            }
+        });
+    });
+}
+
+function renderTodayBoard() {
+    const todayDate = new Date();
+    if (!goals.length) {
+        dom.dashboardTodayPanel.innerHTML = `<div class="empty-state">Crea tu primera meta para empezar.</div>`;
+        return;
+    }
+
+    const items = getTodayItems(goals, sessionsByGoalId, todayDate);
+    const hasActiveDay = items.some((item) => item.plannedMinutes > 0);
+
+    const header = `
+        <div class="today-header">
+            <h3>Hoy</h3>
+            <p class="card-subtitle">Lo que realmente importa hoy.</p>
+        </div>
+    `;
+
+    const list = items.map((item) => `
+        <div class="today-item" data-goal-id="${item.goalId}">
+            <div class="today-item-header">
+                <div>
+                    <div class="goal-type">${getGoalTypeLabel(item.type)}</div>
+                    <div class="today-title" data-select-goal="${item.goalId}">${item.goalTitle}</div>
+                </div>
+                <div class="today-progress">
+                    <span class="today-chip">${item.completedMinutes} / ${item.plannedMinutes} min</span>
+                    <span>${item.isTodayWorkDay ? "Día activo" : "Día libre"}</span>
+                </div>
+            </div>
+            <div class="goal-status status-${item.status}">${item.suggestionText}</div>
+            <div class="today-actions">
+                <button class="btn btn-secondary" data-add-minutes="15" data-goal-id="${item.goalId}">+15 min</button>
+                <button class="btn btn-secondary" data-add-minutes="30" data-goal-id="${item.goalId}">+30 min</button>
+            </div>
+        </div>
+    `).join("");
+
+    const restMessage = !hasActiveDay
+        ? `<div class="empty-state">Hoy toca descansar o revisar tus metas.</div>`
+        : "";
+
+    dom.dashboardTodayPanel.innerHTML = `${header}<div class="today-list">${list}</div>${restMessage}`;
+
+    dom.dashboardTodayPanel.querySelectorAll("[data-add-minutes]").forEach((button) => {
+        button.addEventListener("click", (event) => {
+            const goalId = event.currentTarget.getAttribute("data-goal-id");
+            const minutes = Number(event.currentTarget.getAttribute("data-add-minutes"));
+            if (!goalId || !Number.isFinite(minutes)) return;
+            addQuickSession(goalId, minutes);
+        });
+    });
+
+    dom.dashboardTodayPanel.querySelectorAll("[data-select-goal]").forEach((el) => {
+        el.addEventListener("click", (event) => {
+            const goalId = event.currentTarget.getAttribute("data-select-goal");
+            if (goalId) {
+                appState.dashboardMode = "vision";
+                setCurrentGoalById(goalId);
+            }
+        });
+    });
 }
 
 function renderScenarios() {
@@ -651,7 +1001,20 @@ function saveSession() {
         isEstimated = false;
     }
 
-    sessions.unshift({
+    addSessionForGoal(currentGoal.id, { minutes, value, isEstimated });
+
+    saveData();
+    renderDashboard();
+    renderScenarios();
+    closeLogModal();
+}
+
+function addSessionForGoal(goalId, { minutes, value = null, isEstimated = false } = {}) {
+    if (!sessionsByGoalId[goalId]) {
+        sessionsByGoalId[goalId] = [];
+    }
+
+    sessionsByGoalId[goalId].unshift({
         id: Date.now(),
         date: new Date().toISOString().split("T")[0],
         minutes,
@@ -659,10 +1022,17 @@ function saveSession() {
         isEstimated
     });
 
+    if (goalId === currentGoalId) {
+        sessions = normalizeSessions(sessionsByGoalId[goalId]);
+    }
+}
+
+function addQuickSession(goalId, minutes) {
+    if (minutes <= 0) return;
+    addSessionForGoal(goalId, { minutes });
     saveData();
     renderDashboard();
     renderScenarios();
-    closeLogModal();
 }
 
 // --- 7. MODAL: CONFIGURAR PROYECTO (WIZARD) ---
@@ -1480,6 +1850,7 @@ function saveWizardGoal() {
         mode: smartPlan.metric.mode,
         unitName: smartPlan.metric.unitName,
         targetValue: smartPlan.metric.targetValue,
+        deadlineDate: smartPlan.deadline,
         plan: smartPlan.plan,
         rate: {
             valuePerHour: finalRate
@@ -1496,6 +1867,7 @@ function saveWizardGoal() {
         currentGoal = normalizeGoal({ ...currentGoal, ...goalPayload });
     }
 
+    appState.selectedGoalId = currentGoalId;
     saveData();
     renderDashboard();
     renderScenarios();
@@ -1521,6 +1893,13 @@ function initApp() {
     loadData();
     renderDashboard();
     renderScenarios();
+
+    if (dom.btnDashboardVision) {
+        dom.btnDashboardVision.addEventListener("click", () => setDashboardMode("vision"));
+    }
+    if (dom.btnDashboardToday) {
+        dom.btnDashboardToday.addEventListener("click", () => setDashboardMode("today"));
+    }
 
     dom.btnLogSession.addEventListener("click", openLogModal);
     dom.btnCloseSessionModal.addEventListener("click", closeLogModal);

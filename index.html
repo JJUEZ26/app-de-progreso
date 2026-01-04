@@ -73,6 +73,22 @@
             </section>
         </div>
 
+        <!-- DASHBOARD MODES -->
+        <section class="card dashboard-modes-card">
+            <header class="card-header">
+                <div>
+                    <h2 class="card-title">Dashboard</h2>
+                    <p class="card-subtitle">Elige cómo quieres ver tu progreso.</p>
+                </div>
+                <div class="dashboard-toggle" role="tablist" aria-label="Modos de dashboard">
+                    <button id="btn-dashboard-vision" class="btn btn-sm btn-secondary is-active" type="button">Visión</button>
+                    <button id="btn-dashboard-today" class="btn btn-sm btn-secondary" type="button">Hoy</button>
+                </div>
+            </header>
+            <div id="dashboard-vision" class="dashboard-mode-panel is-active"></div>
+            <div id="dashboard-today" class="dashboard-mode-panel"></div>
+        </section>
+
         <!-- SMART CREATE -->
         <section class="card smart-create-card">
             <header class="card-header">
