@@ -1,362 +1,468 @@
 /* WRITER'S DASHBOARD APP
-    Versión: 0.4.0 (Project Wizard & Config)
+    Versión: 2.1 (Bugfix & Enhanced Logic)
 */
 
 // --- 1. CONFIGURACIÓN Y MODELO DE DATOS ---
 
-const STORAGE_KEY_SESSIONS = "writerDashboard_sessions_proj_001";
-const STORAGE_KEY_PROJECT = "writerDashboard_project";
-
-// Plantilla por defecto (Inmutable)
-const DEFAULT_PROJECT = {
-    id: "proj_default",
-    name: "Mi Nuevo Proyecto",
-    targetWords: 50000,
-    startDate: new Date().toISOString().split('T')[0],
-    schedule: {
-        workDays: [1, 2, 3, 4, 5], // 1=Lun ... 5=Vie, 6=Sab, 0=Dom
-        hoursPerSession: 1,
-        wordsPerHour: 500 
-    },
-    currentWords: 0,
-    currentPercent: 0
+const KEYS = {
+    GOAL: "writerDashboard_goal",
+    SESSIONS: "writerDashboard_sessions"
 };
 
-// Estado global
-let currentProject = { ...DEFAULT_PROJECT };
-let sessions = []; 
+const LEGACY_KEYS = {
+    GOAL: "writerDashboard_project",
+    SESSIONS: "writerDashboard_sessions_proj_001"
+};
 
+const DEFAULT_GOAL = {
+    id: "goal_default",
+    name: "Mi Nuevo Proyecto",
+    target: 50000,
+    mode: "units",
+    startDate: new Date().toISOString().split("T")[0],
+    scheduleDays: [1, 2, 3, 4, 5], // 1=Lun ... 6=Sab, 0=Dom
+    minutesPerSession: 60,
+    rate: 500
+};
+
+let currentGoal = { ...DEFAULT_GOAL };
+let sessions = [];
 
 // --- 2. REFERENCIAS AL DOM ---
 
-const domElements = {
-    // Dashboard Stats
-    projectName: document.getElementById('project-name'),
-    wordsProgress: document.getElementById('words-progress'),
-    percentProgress: document.getElementById('percent-progress'),
-    progressBar: document.getElementById('progress-bar-fill'),
-    etaDate: document.getElementById('eta-date'),
-    
-    // Settings Display
-    settingGoal: document.getElementById('setting-goal'),
-    settingDays: document.getElementById('setting-days'),
-    settingHours: document.getElementById('setting-hours'),
-    settingWph: document.getElementById('setting-wph'),
-    
-    // Main Actions
-    btnLogSession: document.getElementById('btn-log-session'),
-    btnExplore: document.getElementById('btn-explore-scenarios'),
-    btnOpenProjectWizard: document.getElementById('btn-open-project-wizard'),
+const dom = {
+    projectName: document.getElementById("project-name"),
+    wordsProgress: document.getElementById("words-progress"),
+    percentProgress: document.getElementById("percent-progress"),
+    progressBar: document.getElementById("progress-bar-fill"),
+    etaDate: document.getElementById("eta-date"),
 
-    // --- Modal: Registrar Sesión ---
-    modalSession: document.getElementById('modal-log-session'),
-    btnCloseSessionModal: document.getElementById('btn-close-modal'), // Asegúrate de que el ID coincida en HTML
-    btnCancelSession: document.getElementById('btn-cancel-session'),
-    btnSaveSession: document.getElementById('btn-save-session'),
-    inputSessionHours: document.getElementById('input-hours'),
-    inputSessionWords: document.getElementById('input-words'),
+    settingGoal: document.getElementById("setting-goal"),
+    settingDays: document.getElementById("setting-days"),
+    settingHours: document.getElementById("setting-hours"),
+    settingWph: document.getElementById("setting-wph"),
 
-    // --- Modal: Configurar Proyecto ---
-    modalProject: document.getElementById('modal-project'),
-    btnCloseProjectModal: document.getElementById('btn-close-project-modal'),
-    btnCancelProject: document.getElementById('btn-cancel-project'),
-    btnSaveProject: document.getElementById('btn-save-project'),
-    inputProjectName: document.getElementById('input-project-name'),
-    inputProjectTarget: document.getElementById('input-project-target'),
-    inputProjectHours: document.getElementById('input-project-hours'),
-    inputProjectWph: document.getElementById('input-project-wph'),
-    // Checkboxes se seleccionarán dinámicamente por clase
+    weeklySessions: document.getElementById("weekly-sessions"),
+    weeklyTime: document.getElementById("weekly-time"),
+    weeklyUnits: document.getElementById("weekly-units"),
+
+    btnLogSession: document.getElementById("btn-log-session"),
+    btnExplore: document.getElementById("btn-explore-scenarios"),
+    btnOpenWizard: document.getElementById("btn-open-project-wizard"),
+
+    modalSession: document.getElementById("modal-log-session"),
+    btnCloseSessionModal: document.getElementById("btn-close-modal"),
+    btnCancelSession: document.getElementById("btn-cancel-session"),
+    btnSaveSession: document.getElementById("btn-save-session"),
+    inputSessionHours: document.getElementById("input-hours"),
+    inputSessionWords: document.getElementById("input-words"),
+
+    modalProject: document.getElementById("modal-project"),
+    btnCloseProjectModal: document.getElementById("btn-close-project-modal"),
+    btnCancelProject: document.getElementById("btn-cancel-project"),
+    btnSaveProject: document.getElementById("btn-save-project"),
+    inputProjectName: document.getElementById("input-project-name"),
+    inputProjectTarget: document.getElementById("input-project-target"),
+    inputProjectHours: document.getElementById("input-project-hours"),
+    inputProjectWph: document.getElementById("input-project-wph")
 };
 
+// --- 3. DATOS Y MIGRACIONES ---
 
-// --- 3. LÓGICA DE NEGOCIO (Cálculos) ---
+function migrateStorageIfNeeded() {
+    const hasGoal = localStorage.getItem(KEYS.GOAL);
+    const hasSessions = localStorage.getItem(KEYS.SESSIONS);
 
-function calculateProgress(project, currentSessions) {
-    let totalWords = 0;
+    if (!hasGoal) {
+        const legacyGoalStr = localStorage.getItem(LEGACY_KEYS.GOAL);
+        if (legacyGoalStr) {
+            try {
+                const legacyGoal = JSON.parse(legacyGoalStr);
+                const migratedGoal = {
+                    ...DEFAULT_GOAL,
+                    name: legacyGoal.name || DEFAULT_GOAL.name,
+                    target: legacyGoal.targetWords || DEFAULT_GOAL.target,
+                    scheduleDays: legacyGoal.schedule?.workDays || DEFAULT_GOAL.scheduleDays,
+                    minutesPerSession: Math.round(
+                        (legacyGoal.schedule?.hoursPerSession || DEFAULT_GOAL.minutesPerSession / 60) * 60
+                    ),
+                    rate: legacyGoal.schedule?.wordsPerHour || DEFAULT_GOAL.rate
+                };
+                localStorage.setItem(KEYS.GOAL, JSON.stringify(migratedGoal));
+            } catch (error) {
+                console.error(error);
+            }
+        }
+    }
+
+    if (!hasSessions) {
+        const legacySessionsStr = localStorage.getItem(LEGACY_KEYS.SESSIONS);
+        if (legacySessionsStr) {
+            try {
+                const legacySessions = JSON.parse(legacySessionsStr);
+                const migratedSessions = Array.isArray(legacySessions)
+                    ? legacySessions.map((session) => ({
+                        id: session.id || Date.now(),
+                        date: session.date || new Date().toISOString().split("T")[0],
+                        minutes: Number(session.minutes) || 0,
+                        value: session.words ?? null,
+                        isEstimated: false
+                    }))
+                    : [];
+                localStorage.setItem(KEYS.SESSIONS, JSON.stringify(migratedSessions));
+            } catch (error) {
+                console.error(error);
+            }
+        }
+    }
+}
+
+function loadData() {
+    const goalStr = localStorage.getItem(KEYS.GOAL);
+    if (!goalStr) {
+        currentGoal = { ...DEFAULT_GOAL };
+    } else {
+        try {
+            const parsed = JSON.parse(goalStr);
+            currentGoal = {
+                ...DEFAULT_GOAL,
+                ...parsed,
+                mode: parsed.mode || "units",
+                scheduleDays: Array.isArray(parsed.scheduleDays) ? parsed.scheduleDays : DEFAULT_GOAL.scheduleDays
+            };
+        } catch (error) {
+            console.error(error);
+            currentGoal = { ...DEFAULT_GOAL };
+        }
+    }
+
+    const sessionsStr = localStorage.getItem(KEYS.SESSIONS);
+    if (sessionsStr) {
+        try {
+            const parsedSessions = JSON.parse(sessionsStr);
+            sessions = Array.isArray(parsedSessions)
+                ? parsedSessions.map((session) => ({
+                    id: session.id || Date.now(),
+                    date: session.date || new Date().toISOString().split("T")[0],
+                    minutes: Number(session.minutes) || 0,
+                    value: typeof session.value === "number" ? session.value : session.value ?? null,
+                    isEstimated: Boolean(session.isEstimated)
+                }))
+                : [];
+        } catch (error) {
+            console.error(error);
+            sessions = [];
+        }
+    } else {
+        sessions = [];
+    }
+}
+
+function saveData() {
+    localStorage.setItem(KEYS.GOAL, JSON.stringify(currentGoal));
+    localStorage.setItem(KEYS.SESSIONS, JSON.stringify(sessions));
+}
+
+// --- 4. LÓGICA DE NEGOCIO (Cálculos) ---
+
+function getStats() {
+    let totalUnits = 0;
     let totalMinutes = 0;
 
-    currentSessions.forEach(session => {
-        let sessionWords = 0;
-        
-        // Si hay palabras registradas las usamos, si no, estimamos
-        if (session.words !== undefined && session.words !== null && session.words !== "") {
-            sessionWords = parseInt(session.words);
-        } else {
-            sessionWords = (session.minutes / 60) * project.schedule.wordsPerHour;
+    sessions.forEach((session) => {
+        totalMinutes += session.minutes;
+
+        if (currentGoal.mode === "time") {
+            totalUnits += session.minutes;
+            return;
         }
 
-        totalWords += sessionWords;
-        totalMinutes += session.minutes;
+        if (typeof session.value === "number") {
+            totalUnits += session.value;
+            return;
+        }
+
+        const rate = currentGoal.rate;
+        if (rate > 0 && session.minutes > 0) {
+            totalUnits += Math.floor((session.minutes / 60) * rate);
+        }
     });
 
-    let percentage = 0;
-    if (project.targetWords > 0) {
-        percentage = Math.floor((totalWords / project.targetWords) * 100);
-        if (percentage > 100) percentage = 100;
-    }
+    const percent = currentGoal.target > 0
+        ? Math.min(100, Math.floor((totalUnits / currentGoal.target) * 100))
+        : 0;
 
-    let averageWordsPerHour = 0;
-    if (totalMinutes > 0) {
-        const totalHours = totalMinutes / 60;
-        averageWordsPerHour = Math.floor(totalWords / totalHours);
-    } else {
-        averageWordsPerHour = project.schedule.wordsPerHour;
-    }
+    const averageRate = totalMinutes > 0
+        ? Math.floor(totalUnits / (totalMinutes / 60))
+        : currentGoal.rate;
 
-    return { totalWords, percentage, totalMinutes, averageWordsPerHour };
+    return { totalUnits, totalMinutes, percent, averageRate };
 }
 
-function estimateCompletionDate(project, currentStats, paceModifier = 1.0) {
-    const remainingWords = project.targetWords - currentStats.totalWords;
+function getWeeklyStats() {
+    const now = new Date();
+    const weekStart = new Date(now);
+    const day = weekStart.getDay();
+    const diff = (day === 0 ? -6 : 1) - day;
+    weekStart.setDate(weekStart.getDate() + diff);
+    weekStart.setHours(0, 0, 0, 0);
 
-    if (remainingWords <= 0) {
-        return { remainingWords: 0, daysNeeded: 0, estimatedDate: "¡Completado!" };
+    let completedSessions = 0;
+    let totalMinutes = 0;
+    let totalUnits = 0;
+
+    sessions.forEach((session) => {
+        const sessionDate = new Date(`${session.date}T00:00:00`);
+        if (sessionDate >= weekStart) {
+            completedSessions += 1;
+            totalMinutes += session.minutes;
+
+            if (currentGoal.mode === "time") {
+                totalUnits += session.minutes;
+            } else if (typeof session.value === "number") {
+                totalUnits += session.value;
+            } else if (currentGoal.rate > 0 && session.minutes > 0) {
+                totalUnits += Math.floor((session.minutes / 60) * currentGoal.rate);
+            }
+        }
+    });
+
+    return {
+        completedSessions,
+        plannedSessions: currentGoal.scheduleDays.length,
+        totalMinutes,
+        totalUnits
+    };
+}
+
+function calculateETA(paceModifier = 1) {
+    const stats = getStats();
+    const remainingUnits = currentGoal.target - stats.totalUnits;
+
+    if (remainingUnits <= 0) {
+        return "¡Completado!";
     }
 
-    const baseWordsPerHour = (currentStats.averageWordsPerHour > 0) 
-        ? currentStats.averageWordsPerHour 
-        : project.schedule.wordsPerHour;
+    const sessionsPerWeek = currentGoal.scheduleDays.length;
+    const minutesPerSession = currentGoal.minutesPerSession;
 
-    const effectiveWordsPerHour = baseWordsPerHour * paceModifier;
-    const hoursPerSession = project.schedule.hoursPerSession;
-    const sessionsPerWeek = project.schedule.workDays.length; 
-    
-    // Evitar división por cero
-    if (effectiveWordsPerHour <= 0 || hoursPerSession <= 0 || sessionsPerWeek <= 0) {
-        return { remainingWords, daysNeeded: Infinity, estimatedDate: "Configura tu ritmo" };
+    if (currentGoal.mode === "time") {
+        const minutesPerWeek = minutesPerSession * sessionsPerWeek * paceModifier;
+        if (minutesPerWeek <= 0) {
+            return "Configura tu ritmo";
+        }
+        const weeksNeeded = remainingUnits / minutesPerWeek;
+        return formatFutureDate(Math.ceil(weeksNeeded * 7));
     }
 
-    const wordsPerWeek = effectiveWordsPerHour * hoursPerSession * sessionsPerWeek;
-    const weeksNeeded = remainingWords / wordsPerWeek;
-    const daysNeeded = Math.ceil(weeksNeeded * 7); 
+    const rateToUse = stats.averageRate > 0 ? stats.averageRate : currentGoal.rate;
+    const wordsPerSession = (rateToUse * (minutesPerSession / 60)) * paceModifier;
 
+    if (wordsPerSession <= 0 || sessionsPerWeek <= 0) {
+        return "Configura tu ritmo";
+    }
+
+    const wordsPerWeek = wordsPerSession * sessionsPerWeek;
+    const weeksNeeded = remainingUnits / wordsPerWeek;
+    return formatFutureDate(Math.ceil(weeksNeeded * 7));
+}
+
+function formatFutureDate(daysToAdd) {
     const today = new Date();
     const targetDate = new Date(today);
-    targetDate.setDate(today.getDate() + daysNeeded);
-
-    const dateOptions = { day: 'numeric', month: 'short', year: 'numeric' };
-    const formattedDate = targetDate.toLocaleDateString('es-ES', dateOptions);
-
-    return { remainingWords, daysNeeded, estimatedDate: formattedDate };
+    targetDate.setDate(today.getDate() + daysToAdd);
+    return targetDate.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
 }
 
-
-// --- 4. GESTIÓN DE DATOS (Storage) ---
-
-function loadSessions() {
-    try {
-        const stored = localStorage.getItem(STORAGE_KEY_SESSIONS);
-        return stored ? JSON.parse(stored) : null;
-    } catch (e) { console.error(e); return null; }
-}
-
-function saveSessions(data) {
-    try { localStorage.setItem(STORAGE_KEY_SESSIONS, JSON.stringify(data)); } 
-    catch (e) { console.error(e); }
-}
-
-function loadProject() {
-    try {
-        const stored = localStorage.getItem(STORAGE_KEY_PROJECT);
-        return stored ? JSON.parse(stored) : null;
-    } catch (e) { console.error(e); return null; }
-}
-
-function saveProject(data) {
-    try { localStorage.setItem(STORAGE_KEY_PROJECT, JSON.stringify(data)); } 
-    catch (e) { console.error(e); }
-}
-
-
-// --- 5. RENDERIZADO (Vista) ---
+// --- 5. RENDERIZADO ---
 
 function renderDashboard() {
-    // Usar siempre currentProject y sessions globales
-    const stats = calculateProgress(currentProject, sessions);
+    const stats = getStats();
+    const weeklyStats = getWeeklyStats();
+    const fmt = new Intl.NumberFormat("es-ES");
 
-    // Actualizar datos en memoria visual
-    currentProject.currentWords = stats.totalWords;
-    currentProject.currentPercent = stats.percentage;
+    dom.projectName.textContent = currentGoal.name;
+    dom.wordsProgress.textContent = `${fmt.format(stats.totalUnits)} / ${fmt.format(currentGoal.target)} palabras`;
+    dom.percentProgress.textContent = `${stats.percent}%`;
+    dom.progressBar.style.width = `${stats.percent}%`;
+    dom.etaDate.textContent = calculateETA(1);
 
-    const eta = estimateCompletionDate(currentProject, stats, 1.0);
+    dom.settingGoal.textContent = fmt.format(currentGoal.target);
+    dom.settingDays.textContent = `${currentGoal.scheduleDays.length} días/sem`;
+    dom.settingHours.textContent = `${(currentGoal.minutesPerSession / 60).toFixed(2).replace(/\\.00$/, "")}h/sesión`;
+    const speedLabel = stats.totalMinutes > 0 ? "Real" : "Est.";
+    const speedValue = stats.totalMinutes > 0 ? stats.averageRate : currentGoal.rate;
+    dom.settingWph.textContent = `${fmt.format(speedValue)} pal/h (${speedLabel})`;
 
-    const fmt = new Intl.NumberFormat('es-ES'); 
-    
-    // Project Card
-    domElements.projectName.textContent = currentProject.name;
-    domElements.wordsProgress.textContent = `${fmt.format(stats.totalWords)} / ${fmt.format(currentProject.targetWords)} palabras`;
-    domElements.percentProgress.textContent = `${stats.percentage}%`;
-    domElements.progressBar.style.width = `${stats.percentage}%`;
-    domElements.etaDate.textContent = eta.estimatedDate;
-
-    // Settings Card
-    domElements.settingGoal.textContent = fmt.format(currentProject.targetWords);
-    domElements.settingDays.textContent = `${currentProject.schedule.workDays.length} días/sem`;
-    domElements.settingHours.textContent = `${currentProject.schedule.hoursPerSession}h/sesión`;
-    
-    const speedToShow = (stats.averageWordsPerHour > 0) ? stats.averageWordsPerHour : currentProject.schedule.wordsPerHour;
-    const speedLabel = (stats.averageWordsPerHour > 0) ? "Real" : "Est.";
-    domElements.settingWph.textContent = `${fmt.format(speedToShow)} pal/h (${speedLabel})`;
+    dom.weeklySessions.textContent = `${weeklyStats.completedSessions} / ${weeklyStats.plannedSessions}`;
+    dom.weeklyTime.textContent = `${(weeklyStats.totalMinutes / 60).toFixed(1).replace(/\\.0$/, "")}h`;
+    dom.weeklyUnits.textContent = fmt.format(weeklyStats.totalUnits);
 }
 
+function renderScenarios() {
+    const scenarioCards = document.querySelectorAll(".scenario-card");
+    const modifiers = [0.8, 1, 1.2];
+    scenarioCards.forEach((card, index) => {
+        const dateEl = card.querySelector(".scenario-date");
+        const descEl = card.querySelector(".scenario-desc");
+        if (!dateEl || !descEl) return;
+
+        const modifier = modifiers[index] ?? 1;
+        dateEl.textContent = calculateETA(modifier);
+        if (modifier < 1) descEl.textContent = "-20% intensidad";
+        if (modifier === 1) descEl.textContent = "Basado en tu histórico";
+        if (modifier > 1) descEl.textContent = "+20% intensidad";
+    });
+}
 
 // --- 6. MODAL: REGISTRAR SESIÓN ---
 
-function openSessionModal() {
-    domElements.modalSession.classList.remove('hidden');
-    // Pre-llenar con valores del proyecto actual
-    domElements.inputSessionHours.value = currentProject.schedule.hoursPerSession;
-    domElements.inputSessionWords.value = '';
-    domElements.inputSessionHours.focus();
+function openLogModal() {
+    dom.modalSession.classList.remove("hidden");
+    dom.inputSessionHours.value = (currentGoal.minutesPerSession / 60).toFixed(2).replace(/\\.00$/, "");
+    dom.inputSessionWords.value = "";
+    dom.inputSessionHours.focus();
 }
 
-function closeSessionModal() {
-    domElements.modalSession.classList.add('hidden');
+function closeLogModal() {
+    dom.modalSession.classList.add("hidden");
 }
 
-function handleSaveSession() {
-    const hours = parseFloat(domElements.inputSessionHours.value);
-    const wordsInput = domElements.inputSessionWords.value;
-    
+function saveSession() {
+    const hours = parseFloat(dom.inputSessionHours.value);
+    const wordsInput = dom.inputSessionWords.value;
+
     if (isNaN(hours) || hours <= 0) {
-        alert("Horas inválidas"); return;
+        alert("Horas inválidas");
+        return;
     }
 
-    let words = 0;
-    if (wordsInput && !isNaN(parseInt(wordsInput))) {
-        words = parseInt(wordsInput);
+    const minutes = hours * 60;
+    let value = null;
+    let isEstimated = false;
+
+    if (currentGoal.mode === "time") {
+        value = minutes;
+    } else if (wordsInput && !isNaN(parseInt(wordsInput, 10))) {
+        value = parseInt(wordsInput, 10);
+    } else if (currentGoal.rate > 0) {
+        value = Math.floor(hours * currentGoal.rate);
+        isEstimated = true;
     } else {
-        words = Math.floor(hours * currentProject.schedule.wordsPerHour);
+        value = null;
+        isEstimated = false;
     }
 
-    const newSession = {
+    sessions.unshift({
         id: Date.now(),
-        date: new Date().toISOString().split('T')[0],
-        minutes: hours * 60,
-        words: words
-    };
+        date: new Date().toISOString().split("T")[0],
+        minutes,
+        value,
+        isEstimated
+    });
 
-    sessions.push(newSession);
-    saveSessions(sessions);
+    saveData();
     renderDashboard();
-    closeSessionModal();
+    renderScenarios();
+    closeLogModal();
 }
-
 
 // --- 7. MODAL: CONFIGURAR PROYECTO (WIZARD) ---
 
-function openProjectModal() {
-    domElements.modalProject.classList.remove('hidden');
-    fillProjectModalFromCurrent();
-}
+function openWizard() {
+    dom.modalProject.classList.remove("hidden");
+    dom.inputProjectName.value = currentGoal.name;
+    dom.inputProjectTarget.value = currentGoal.target;
+    dom.inputProjectHours.value = (currentGoal.minutesPerSession / 60).toFixed(2).replace(/\\.00$/, "");
+    dom.inputProjectWph.value = currentGoal.rate;
 
-function closeProjectModal() {
-    domElements.modalProject.classList.add('hidden');
-}
-
-function fillProjectModalFromCurrent() {
-    domElements.inputProjectName.value = currentProject.name;
-    domElements.inputProjectTarget.value = currentProject.targetWords;
-    domElements.inputProjectHours.value = currentProject.schedule.hoursPerSession;
-    domElements.inputProjectWph.value = currentProject.schedule.wordsPerHour;
-
-    // Checkboxes (Días)
-    const checkboxes = document.querySelectorAll('.day-checkbox');
-    const activeDays = currentProject.schedule.workDays; // Array de números [1, 3, 5...]
-
-    checkboxes.forEach(chk => {
-        const dayVal = parseInt(chk.value);
-        if (activeDays.includes(dayVal)) {
-            chk.checked = true;
-        } else {
-            chk.checked = false;
-        }
+    const checkboxes = document.querySelectorAll(".day-checkbox");
+    checkboxes.forEach((chk) => {
+        const dayValue = parseInt(chk.value, 10);
+        chk.checked = currentGoal.scheduleDays.includes(dayValue);
     });
 }
 
-function handleSaveProject() {
-    const name = domElements.inputProjectName.value.trim();
-    const target = parseInt(domElements.inputProjectTarget.value);
-    const hours = parseFloat(domElements.inputProjectHours.value);
-    const wph = parseInt(domElements.inputProjectWph.value);
-
-    // Obtener días seleccionados
-    const checkboxes = document.querySelectorAll('.day-checkbox:checked');
-    const selectedDays = Array.from(checkboxes).map(chk => parseInt(chk.value));
-
-    // Validaciones
-    if (!name) return alert("El nombre es obligatorio");
-    if (isNaN(target) || target <= 0) return alert("Meta inválida");
-    if (isNaN(hours) || hours <= 0) return alert("Horas inválidas");
-    if (isNaN(wph) || wph <= 0) return alert("Palabras por hora inválidas");
-    if (selectedDays.length === 0) return alert("Selecciona al menos un día de escritura");
-
-    // Actualizar objeto proyecto
-    const updatedProject = {
-        ...currentProject,
-        name: name,
-        targetWords: target,
-        schedule: {
-            workDays: selectedDays,
-            hoursPerSession: hours,
-            wordsPerHour: wph
-        }
-    };
-
-    // Guardar y Renderizar
-    currentProject = updatedProject;
-    saveProject(currentProject);
-    renderDashboard();
-    closeProjectModal();
+function toggleWizardMode(mode) {
+    currentGoal.mode = mode || currentGoal.mode || "units";
 }
 
+function closeWizard() {
+    dom.modalProject.classList.add("hidden");
+}
+
+function saveGoalConfiguration() {
+    const name = dom.inputProjectName.value.trim();
+    const target = parseInt(dom.inputProjectTarget.value, 10);
+    const hours = parseFloat(dom.inputProjectHours.value);
+    const rateInput = parseInt(dom.inputProjectWph.value, 10);
+
+    const selectedDays = Array.from(document.querySelectorAll(".day-checkbox:checked")).map((chk) =>
+        parseInt(chk.value, 10)
+    );
+
+    if (!name) {
+        alert("El nombre es obligatorio");
+        return;
+    }
+
+    if (isNaN(target) || target <= 0) {
+        alert("Meta inválida");
+        return;
+    }
+
+    if (selectedDays.length === 0) {
+        alert("Selecciona al menos un día de escritura");
+        return;
+    }
+
+    const minutesPerSession = !isNaN(hours) && hours > 0 ? Math.round(hours * 60) : 60;
+    const rate = currentGoal.mode === "time"
+        ? currentGoal.rate
+        : (!isNaN(rateInput) && rateInput > 0 ? rateInput : 10);
+
+    currentGoal = {
+        ...currentGoal,
+        name,
+        target,
+        scheduleDays: selectedDays,
+        minutesPerSession,
+        rate
+    };
+
+    saveData();
+    renderDashboard();
+    renderScenarios();
+    closeWizard();
+}
 
 // --- 8. INICIALIZACIÓN ---
 
-document.addEventListener('DOMContentLoaded', () => {
-    
-    // 1. Cargar Proyecto
-    const storedProject = loadProject();
-    if (storedProject) {
-        currentProject = storedProject;
-    } else {
-        currentProject = { ...DEFAULT_PROJECT };
-    }
-
-    // 2. Cargar Sesiones
-    const storedSessions = loadSessions();
-    if (storedSessions && storedSessions.length > 0) {
-        sessions = storedSessions;
-    } else {
-        sessions = []; // Empezar limpio si no hay nada guardado
-    }
-
-    // 3. Render Inicial
+function initApp() {
+    migrateStorageIfNeeded();
+    loadData();
     renderDashboard();
+    renderScenarios();
 
-    // --- EVENT LISTENERS ---
+    dom.btnLogSession.addEventListener("click", openLogModal);
+    dom.btnCloseSessionModal.addEventListener("click", closeLogModal);
+    dom.btnCancelSession.addEventListener("click", closeLogModal);
+    dom.btnSaveSession.addEventListener("click", saveSession);
 
-    // Session Modal
-    domElements.btnLogSession.addEventListener('click', openSessionModal);
-    domElements.btnCloseSessionModal.addEventListener('click', closeSessionModal); // Botón X
-    domElements.btnCancelSession.addEventListener('click', closeSessionModal);
-    domElements.btnSaveSession.addEventListener('click', handleSaveSession);
+    dom.btnOpenWizard.addEventListener("click", openWizard);
+    dom.btnCloseProjectModal.addEventListener("click", closeWizard);
+    dom.btnCancelProject.addEventListener("click", closeWizard);
+    dom.btnSaveProject.addEventListener("click", saveGoalConfiguration);
 
-    // Project Modal
-    domElements.btnOpenProjectWizard.addEventListener('click', openProjectModal);
-    domElements.btnCloseProjectModal.addEventListener('click', closeProjectModal);
-    domElements.btnCancelProject.addEventListener('click', closeProjectModal);
-    domElements.btnSaveProject.addEventListener('click', handleSaveProject);
-
-    // Click outside closing (para ambos modales)
-    window.addEventListener('click', (e) => {
-        if (e.target === domElements.modalSession) closeSessionModal();
-        if (e.target === domElements.modalProject) closeProjectModal();
+    dom.btnExplore.addEventListener("click", () => {
+        const section = document.getElementById("scenarios-section");
+        if (section) section.scrollIntoView({ behavior: "smooth" });
     });
 
-    // Navigation
-    domElements.btnExplore.addEventListener('click', () => {
-        const sec = document.getElementById('scenarios-section');
-        if(sec) sec.scrollIntoView({ behavior: 'smooth' });
+    window.addEventListener("click", (event) => {
+        if (event.target === dom.modalSession) closeLogModal();
+        if (event.target === dom.modalProject) closeWizard();
     });
-});
+}
+
+document.addEventListener("DOMContentLoaded", initApp);
