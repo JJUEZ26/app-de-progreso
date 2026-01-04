@@ -33,7 +33,7 @@
                     
                     <div class="progress-container">
                         <div class="progress-labels">
-                            <span id="words-progress">0 / 0 unidades</span>
+                            <span id="words-progress">0 / 0 sesiones</span>
                             <span id="percent-progress" class="percent">0%</span>
                         </div>
                         <div class="progress-bar-track">
@@ -186,119 +186,7 @@
                     <div id="wizard-dots" class="wizard-dots"></div>
                 </div>
 
-                <div id="wizard-steps" class="wizard-steps">
-                    <div class="wizard-step" data-step="1">
-                        <div class="form-field">
-                            <label for="wizard-intent">¿Qué quieres lograr?</label>
-                            <textarea id="wizard-intent" class="input-field" rows="3" placeholder="Quiero leer La Peste de Camus"></textarea>
-                            <small class="hint">Describe tu meta en una frase.</small>
-                        </div>
-                    </div>
-
-                    <div class="wizard-step" data-step="2">
-                        <h4 class="wizard-question">¿Cómo quieres medir el progreso?</h4>
-                        <div class="mode-grid">
-                            <button class="mode-card" data-mode="time" type="button">
-                                <span class="mode-title">Tiempo</span>
-                                <span class="mode-desc">Horas totales</span>
-                            </button>
-                            <button class="mode-card" data-mode="units" type="button">
-                                <span class="mode-title">Unidades</span>
-                                <span class="mode-desc">Páginas, ejercicios, etc.</span>
-                            </button>
-                            <button class="mode-card" data-mode="hybrid" type="button">
-                                <span class="mode-title">Híbrido</span>
-                                <span class="mode-desc">Tiempo + unidades</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="wizard-step" data-step="3">
-                        <div class="form-field">
-                            <label id="wizard-target-label" for="wizard-target">¿Cuántas horas en total?</label>
-                            <input id="wizard-target" type="number" min="1" class="input-field" placeholder="Ej: 40" />
-                            <div class="choice-chips">
-                                <button id="wizard-target-auto" class="choice-chip" type="button">No estoy seguro</button>
-                            </div>
-                        </div>
-                        <div id="wizard-unit-field" class="form-field">
-                            <label for="wizard-unit-name">¿Cómo se llaman tus unidades?</label>
-                            <input id="wizard-unit-name" type="text" class="input-field" placeholder="páginas, ejercicios, lecciones..." />
-                        </div>
-                    </div>
-
-                    <div class="wizard-step" data-step="4">
-                        <div class="form-field">
-                            <label>Días de práctica</label>
-                            <p class="field-hint">Selecciona los días que planeas dedicarle.</p>
-                            <div class="day-chips">
-                                <label class="day-chip">
-                                    <input type="checkbox" class="day-checkbox" value="1" /><span>L</span>
-                                </label>
-                                <label class="day-chip">
-                                    <input type="checkbox" class="day-checkbox" value="2" /><span>M</span>
-                                </label>
-                                <label class="day-chip">
-                                    <input type="checkbox" class="day-checkbox" value="3" /><span>X</span>
-                                </label>
-                                <label class="day-chip">
-                                    <input type="checkbox" class="day-checkbox" value="4" /><span>J</span>
-                                </label>
-                                <label class="day-chip">
-                                    <input type="checkbox" class="day-checkbox" value="5" /><span>V</span>
-                                </label>
-                                <label class="day-chip">
-                                    <input type="checkbox" class="day-checkbox" value="6" /><span>S</span>
-                                </label>
-                                <label class="day-chip">
-                                    <input type="checkbox" class="day-checkbox" value="0" /><span>D</span>
-                                </label>
-                            </div>
-                        </div>
-                        <div class="form-field">
-                            <label for="wizard-minutes">Minutos por sesión</label>
-                            <input id="wizard-minutes" type="number" min="10" step="5" class="input-field" placeholder="Ej: 60" />
-                        </div>
-                    </div>
-
-                    <div class="wizard-step" data-step="5">
-                        <div class="form-field">
-                            <label for="wizard-rate">Ritmo estimado (unidades por hora)</label>
-                            <input id="wizard-rate" type="number" min="1" class="input-field" placeholder="Ej: 20" />
-                            <small class="hint">Se usa para estimar cuando solo registras tiempo.</small>
-                        </div>
-                    </div>
-
-                    <div class="wizard-step" data-step="6">
-                        <div class="wizard-summary">
-                            <div class="form-field">
-                                <label>¿Qué estilo prefieres?</label>
-                                <div id="wizard-pace-options" class="pace-options">
-                                    <button class="pace-card" data-pace="relajado" type="button">Relajado</button>
-                                    <button class="pace-card active" data-pace="normal" type="button">Normal</button>
-                                    <button class="pace-card" data-pace="intenso" type="button">Intenso</button>
-                                </div>
-                            </div>
-                            <div class="form-field">
-                                <label for="wizard-title">Título sugerido</label>
-                                <input id="wizard-title" type="text" class="input-field" placeholder="Nombre de tu meta" />
-                            </div>
-                            <div class="summary-item">
-                                <span class="summary-label">Meta total</span>
-                                <strong id="wizard-summary-target" class="summary-value">--</strong>
-                            </div>
-                            <div class="summary-item">
-                                <span class="summary-label">Plan semanal</span>
-                                <strong id="wizard-summary-plan" class="summary-value">--</strong>
-                            </div>
-                            <div class="summary-item">
-                                <span class="summary-label">ETA estimada</span>
-                                <strong id="wizard-summary-eta" class="summary-value">--</strong>
-                            </div>
-                            <ul id="wizard-summary-insights" class="wizard-insights"></ul>
-                        </div>
-                    </div>
-                </div>
+                <div id="wizard-steps" class="wizard-steps"></div>
             </div>
     
             <footer class="modal-footer">
