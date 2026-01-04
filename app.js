@@ -44,16 +44,20 @@ const DEFAULT_WIZARD_STATE = {
     mode: "units",
     unitName: "unidades",
     targetValue: 0,
+    targetAuto: false,
     daysPerWeek: [1, 2, 3, 4, 5],
     minutesPerSession: 60,
-    rateValuePerHour: 20
+    rateValuePerHour: 20,
+    paceStyle: "normal"
 };
 
 let wizardState = { ...DEFAULT_WIZARD_STATE };
 let wizardStep = 1;
 const wizardMeta = {
     titleEdited: false,
-    unitNameEdited: false
+    unitNameEdited: false,
+    rateEdited: false,
+    modeEdited: false
 };
 
 // --- 2. REFERENCIAS AL DOM ---
@@ -98,14 +102,17 @@ const dom = {
     wizardIntent: document.getElementById("wizard-intent"),
     wizardTitle: document.getElementById("wizard-title"),
     wizardTarget: document.getElementById("wizard-target"),
+    wizardTargetAuto: document.getElementById("wizard-target-auto"),
     wizardTargetLabel: document.getElementById("wizard-target-label"),
     wizardUnitField: document.getElementById("wizard-unit-field"),
     wizardUnitName: document.getElementById("wizard-unit-name"),
     wizardMinutes: document.getElementById("wizard-minutes"),
     wizardRate: document.getElementById("wizard-rate"),
+    wizardPaceOptions: document.getElementById("wizard-pace-options"),
     wizardSummaryTarget: document.getElementById("wizard-summary-target"),
     wizardSummaryPlan: document.getElementById("wizard-summary-plan"),
-    wizardSummaryEta: document.getElementById("wizard-summary-eta")
+    wizardSummaryEta: document.getElementById("wizard-summary-eta"),
+    wizardSummaryInsights: document.getElementById("wizard-summary-insights")
 };
 
 // --- 3. DATOS Y MIGRACIONES ---
@@ -350,6 +357,205 @@ function formatFutureDate(daysToAdd) {
     return targetDate.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
 }
 
+function getPaceModifier(style = "normal") {
+    const modifiers = {
+        relajado: 0.8,
+        normal: 1,
+        intenso: 1.2
+    };
+    return modifiers[style] ?? 1;
+}
+
+function roundToNearest(value, step) {
+    if (!Number.isFinite(value) || !Number.isFinite(step) || step <= 0) {
+        return value;
+    }
+    return Math.round(value / step) * step;
+}
+
+function stripAccents(text) {
+    return text.normalize("NFD").replace(/\p{Diacritic}/gu, "");
+}
+
+function summarizeIntent(intentText, maxWords = 8) {
+    if (!intentText) return "";
+    const stopWords = new Set([
+        "quiero", "quisiera", "gustaria", "gustaría", "me", "aprender", "hacer", "lograr", "alcanzar", "terminar",
+        "completar", "empezar", "empezar", "poder", "un", "una", "unos", "unas", "el", "la", "los", "las", "de",
+        "del", "al", "para", "por", "en", "con", "sobre", "y", "a", "mi", "mis", "tu", "tus", "su", "sus", "que",
+        "leer", "estudiar", "practicar"
+    ]);
+
+    const tokens = intentText
+        .split(/\s+/)
+        .map((word) => word.replace(/[^\p{L}\p{N}]+/gu, ""))
+        .filter(Boolean);
+
+    const filtered = tokens.filter((word) => {
+        const normalized = stripAccents(word.toLowerCase());
+        return !stopWords.has(normalized);
+    });
+
+    return filtered.slice(0, maxWords).join(" ");
+}
+
+function inferCategory(intentText) {
+    const normalized = stripAccents(intentText.toLowerCase());
+    const hasKeyword = (keywords) => keywords.some((keyword) => normalized.includes(keyword));
+
+    if (hasKeyword(["leer", "libro", "novela", "lectura"])) {
+        return "reading";
+    }
+    if (hasKeyword(["cancion", "canción", "piano", "guitarra", "musica", "música"])) {
+        return "music";
+    }
+    if (hasKeyword(["curso", "estudiar", "examen", "estudio", "tema"])) {
+        return "study";
+    }
+    if (hasKeyword(["gym", "gimnasio", "correr", "entreno", "entrenar", "fitness"])) {
+        return "fitness";
+    }
+    return "generic";
+}
+
+function suggestGoalConfig(intentText, mode, userInputs) {
+    const category = inferCategory(intentText);
+    const summary = summarizeIntent(intentText, 8);
+    const planTweaks = {};
+    const notes = [];
+    let unitName = userInputs.unitName || "";
+    let rateSuggestion = null;
+    let targetValueSuggestion = null;
+
+    if (category === "study" && !userInputs.modeEdited) {
+        planTweaks.mode = "time";
+    }
+
+    const effectiveMode = planTweaks.mode ?? mode;
+
+    if (category === "reading") {
+        if (effectiveMode !== "time") {
+            unitName = "páginas";
+        }
+        const minutes = userInputs.minutesPerSession || 0;
+        if (minutes > 0) {
+            if (minutes <= 20) {
+                rateSuggestion = 15;
+            } else if (minutes <= 45) {
+                rateSuggestion = 20;
+            } else {
+                rateSuggestion = 25;
+            }
+        } else {
+            rateSuggestion = 20;
+        }
+    }
+
+    if (category === "music") {
+        if (effectiveMode !== "time") {
+            const unitHint = stripAccents((userInputs.unitName || "").toLowerCase());
+            unitName = unitHint.includes("sesion") ? "sesiones" : "minutos";
+        }
+        rateSuggestion = null;
+    }
+
+    if (category === "fitness") {
+        if (effectiveMode !== "time") {
+            unitName = "sesiones";
+        }
+        const daysCount = userInputs.daysPerWeek?.length ?? 0;
+        if (daysCount > 0) {
+            if (daysCount <= 2) {
+                targetValueSuggestion = 12;
+            } else if (daysCount <= 4) {
+                targetValueSuggestion = 24;
+            } else {
+                targetValueSuggestion = 36;
+            }
+        }
+    }
+
+    if (category === "generic") {
+        if (effectiveMode !== "time") {
+            unitName = "unidades";
+        }
+        rateSuggestion = 10;
+    }
+
+    const titleMap = {
+        reading: summary ? `Leer: ${summary}` : "",
+        music: summary ? `Practicar: ${summary}` : "",
+        study: summary ? `Estudiar: ${summary}` : "",
+        fitness: summary ? `Entrenar: ${summary}` : "",
+        generic: summary ? `Meta: ${summary}` : ""
+    };
+
+    if (userInputs.useAutoTarget) {
+        const days = userInputs.daysPerWeek?.length ?? 0;
+        const minutes = userInputs.minutesPerSession ?? 0;
+        const weeks = 4;
+        const hoursPerSession = minutes / 60;
+        if (category === "reading" && effectiveMode !== "time") {
+            const rate = rateSuggestion ?? userInputs.rateValuePerHour ?? 0;
+            if (days && minutes && rate > 0) {
+                targetValueSuggestion = roundToNearest(days * weeks * hoursPerSession * rate, 10);
+            }
+        } else if (category === "study" && effectiveMode === "time") {
+            if (days && minutes) {
+                targetValueSuggestion = Math.round(days * weeks * hoursPerSession);
+            }
+        } else if (category === "fitness") {
+            if (days) {
+                targetValueSuggestion = days * weeks;
+            }
+        } else if (category === "generic") {
+            if (days) {
+                targetValueSuggestion = days * weeks;
+            }
+        }
+    }
+
+    return {
+        title: titleMap[category] || "",
+        category,
+        unitName,
+        targetValueSuggestion,
+        rateSuggestion,
+        planTweaks,
+        notes
+    };
+}
+
+function calculateEtaDays(goal, paceModifier = 1, sessionsOverride = null) {
+    const stats = getStats(goal);
+    const remainingUnits = goal.targetValue - stats.totalUnits;
+
+    if (remainingUnits <= 0) {
+        return 0;
+    }
+
+    const sessionsPerWeek = sessionsOverride ?? goal.plan.daysPerWeek.length;
+    const minutesPerSession = goal.plan.minutesPerSession;
+
+    if (goal.mode === "time") {
+        const minutesPerWeek = minutesPerSession * sessionsPerWeek * paceModifier;
+        if (minutesPerWeek <= 0) {
+            return null;
+        }
+        const weeksNeeded = (remainingUnits * 60) / minutesPerWeek;
+        return Math.ceil(weeksNeeded * 7);
+    }
+
+    const rateToUse = stats.averageRate > 0 ? stats.averageRate : goal.rate.valuePerHour;
+    const unitsPerSession = (rateToUse * (minutesPerSession / 60)) * paceModifier;
+    if (unitsPerSession <= 0 || sessionsPerWeek <= 0) {
+        return null;
+    }
+    const unitsPerWeek = unitsPerSession * sessionsPerWeek;
+    const weeksNeeded = remainingUnits / unitsPerWeek;
+    return Math.ceil(weeksNeeded * 7);
+}
+
 // --- 5. RENDERIZADO ---
 
 function renderDashboard() {
@@ -456,28 +662,6 @@ function saveSession() {
 
 // --- 7. MODAL: CONFIGURAR PROYECTO (WIZARD) ---
 
-function suggestFromIntent(intentText) {
-    const normalized = intentText.toLowerCase();
-    if (normalized.includes("leer") || normalized.includes("libro")) {
-        return {
-            unitName: "páginas",
-            title: intentText ? `Leer: ${intentText}` : ""
-        };
-    }
-
-    if (normalized.includes("canción") || normalized.includes("guitarra") || normalized.includes("piano")) {
-        return {
-            unitName: "minutos",
-            title: ""
-        };
-    }
-
-    return {
-        unitName: "unidades",
-        title: ""
-    };
-}
-
 function buildWizardStateFromGoal(goal) {
     return {
         ...DEFAULT_WIZARD_STATE,
@@ -553,6 +737,10 @@ function updateWizardModeUI() {
 
     const isTime = wizardState.mode === "time";
     dom.wizardUnitField.style.display = isTime ? "none" : "flex";
+    const rateField = dom.wizardRate?.closest(".form-field");
+    if (rateField) {
+        rateField.style.display = isTime ? "none" : "block";
+    }
     dom.wizardTargetLabel.textContent = isTime
         ? "¿Cuántas horas en total?"
         : "¿Meta total?";
@@ -566,7 +754,20 @@ function updateWizardDaysUI() {
     });
 }
 
+function updateWizardPaceUI() {
+    const buttons = dom.wizardSteps.querySelectorAll(".pace-card");
+    buttons.forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.pace === wizardState.paceStyle);
+    });
+}
+
+function updateWizardTargetAutoUI() {
+    if (!dom.wizardTargetAuto) return;
+    dom.wizardTargetAuto.classList.toggle("active", wizardState.targetAuto);
+}
+
 function updateWizardSummary() {
+    const paceModifier = getPaceModifier(wizardState.paceStyle);
     const previewGoal = normalizeGoal({
         ...currentGoal,
         title: wizardState.title || wizardState.intentText || DEFAULT_GOAL.title,
@@ -584,11 +785,33 @@ function updateWizardSummary() {
 
     const targetLabel = `${formatWizardValue(previewGoal.targetValue)} ${previewGoal.unitName}`;
     const planLabel = `${previewGoal.plan.daysPerWeek.length} días · ${previewGoal.plan.minutesPerSession} min/sesión`;
-    const etaLabel = calculateETA(1, previewGoal);
+    const etaLabel = calculateETA(paceModifier, previewGoal);
+    const insights = [];
+
+    if (etaLabel && etaLabel !== "Configura tu ritmo" && etaLabel !== "¡Completado!") {
+        insights.push(`Con este ritmo, terminas aprox el ${etaLabel}.`);
+    }
+    if (previewGoal.plan.daysPerWeek.length > 0 && previewGoal.plan.minutesPerSession > 0) {
+        insights.push(
+            `Tu semana ideal sería ${previewGoal.plan.daysPerWeek.length} sesiones de ${previewGoal.plan.minutesPerSession} min.`
+        );
+    }
+    const baseEtaDays = calculateEtaDays(previewGoal, paceModifier);
+    const delayedEtaDays = calculateEtaDays(previewGoal, paceModifier, Math.max(previewGoal.plan.daysPerWeek.length - 1, 0));
+    if (Number.isFinite(baseEtaDays) && Number.isFinite(delayedEtaDays) && delayedEtaDays > baseEtaDays) {
+        const diffDays = delayedEtaDays - baseEtaDays;
+        insights.push(`Si un día fallas, tu fecha se movería ~${diffDays} días.`);
+    }
+    if (previewGoal.mode !== "time" && previewGoal.rate.valuePerHour > 0) {
+        insights.push("Puedes registrar solo tiempo y la app estimará tu avance.");
+    }
 
     dom.wizardSummaryTarget.textContent = targetLabel;
     dom.wizardSummaryPlan.textContent = planLabel;
     dom.wizardSummaryEta.textContent = etaLabel;
+    if (dom.wizardSummaryInsights) {
+        dom.wizardSummaryInsights.innerHTML = insights.map((note) => `<li>${note}</li>`).join("");
+    }
     dom.wizardTitle.value = wizardState.title || wizardState.intentText || "";
 }
 
@@ -607,6 +830,9 @@ function isWizardStepValid(step) {
             return wizardState.daysPerWeek.length > 0 && wizardState.minutesPerSession > 0;
         case 5:
             if (wizardState.mode === "time") {
+                return true;
+            }
+            if (wizardState.category === "music") {
                 return true;
             }
             return wizardState.rateValuePerHour > 0;
@@ -649,14 +875,44 @@ function moveWizardStep(direction) {
 }
 
 function applyIntentSuggestions() {
-    const suggestion = suggestFromIntent(wizardState.intentText);
-    if (!wizardMeta.unitNameEdited && wizardState.mode !== "time") {
+    const suggestion = suggestGoalConfig(wizardState.intentText, wizardState.mode, {
+        unitName: wizardState.unitName,
+        daysPerWeek: wizardState.daysPerWeek,
+        minutesPerSession: wizardState.minutesPerSession,
+        rateValuePerHour: wizardState.rateValuePerHour,
+        modeEdited: wizardMeta.modeEdited,
+        useAutoTarget: wizardState.targetAuto
+    });
+
+    wizardState.category = suggestion.category;
+
+    if (!wizardMeta.modeEdited && suggestion.planTweaks?.mode && suggestion.planTweaks.mode !== wizardState.mode) {
+        wizardState.mode = suggestion.planTweaks.mode;
+        if (wizardState.mode === "time") {
+            wizardState.unitName = "horas";
+        }
+        updateWizardModeUI();
+        const steps = getActiveWizardSteps();
+        if (!steps.includes(wizardStep)) {
+            wizardStep = steps[steps.length - 1];
+        }
+    }
+
+    if (!wizardMeta.unitNameEdited && wizardState.mode !== "time" && suggestion.unitName) {
         wizardState.unitName = suggestion.unitName;
         dom.wizardUnitName.value = wizardState.unitName;
     }
-    if (!wizardMeta.titleEdited) {
+    if (!wizardMeta.rateEdited && wizardState.mode !== "time" && Number.isFinite(suggestion.rateSuggestion)) {
+        wizardState.rateValuePerHour = suggestion.rateSuggestion;
+        dom.wizardRate.value = wizardState.rateValuePerHour;
+    }
+    if (!wizardMeta.titleEdited && suggestion.title) {
         wizardState.title = suggestion.title || wizardState.intentText;
         dom.wizardTitle.value = wizardState.title;
+    }
+    if (wizardState.targetAuto && Number.isFinite(suggestion.targetValueSuggestion)) {
+        wizardState.targetValue = suggestion.targetValueSuggestion;
+        dom.wizardTarget.value = wizardState.targetValue;
     }
 }
 
@@ -669,6 +925,10 @@ function openWizard() {
     }
     wizardMeta.titleEdited = Boolean(wizardState.title && wizardState.title !== DEFAULT_GOAL.title);
     wizardMeta.unitNameEdited = Boolean(wizardState.unitName && wizardState.unitName !== DEFAULT_WIZARD_STATE.unitName);
+    wizardMeta.rateEdited = Boolean(wizardState.rateValuePerHour && wizardState.rateValuePerHour !== DEFAULT_WIZARD_STATE.rateValuePerHour);
+    wizardMeta.modeEdited = false;
+    wizardState.targetAuto = false;
+    wizardState.paceStyle = "normal";
     wizardStep = getActiveWizardSteps()[0];
 
     dom.wizardIntent.value = wizardState.intentText;
@@ -677,8 +937,12 @@ function openWizard() {
     dom.wizardMinutes.value = wizardState.minutesPerSession;
     dom.wizardRate.value = wizardState.rateValuePerHour;
     dom.wizardTitle.value = wizardState.title;
+    dom.wizardTargetAuto?.classList.remove("active");
+    applyIntentSuggestions();
     updateWizardModeUI();
     updateWizardDaysUI();
+    updateWizardPaceUI();
+    updateWizardTargetAutoUI();
     updateWizardProgress();
     updateWizardStepVisibility();
     updateWizardButtons();
@@ -762,6 +1026,10 @@ function initApp() {
     dom.wizardTarget.addEventListener("input", (event) => {
         const value = Number(event.target.value);
         wizardState.targetValue = Number.isFinite(value) ? value : 0;
+        if (wizardState.targetValue > 0) {
+            wizardState.targetAuto = false;
+            updateWizardTargetAutoUI();
+        }
         updateWizardButtons();
         updateWizardSummary();
     });
@@ -776,6 +1044,7 @@ function initApp() {
     dom.wizardMinutes.addEventListener("input", (event) => {
         const value = Number(event.target.value);
         wizardState.minutesPerSession = Number.isFinite(value) ? value : 0;
+        applyIntentSuggestions();
         updateWizardButtons();
         updateWizardSummary();
     });
@@ -783,6 +1052,8 @@ function initApp() {
     dom.wizardRate.addEventListener("input", (event) => {
         const value = Number(event.target.value);
         wizardState.rateValuePerHour = Number.isFinite(value) ? value : 0;
+        wizardMeta.rateEdited = true;
+        applyIntentSuggestions();
         updateWizardButtons();
         updateWizardSummary();
     });
@@ -790,12 +1061,22 @@ function initApp() {
     dom.wizardSteps.querySelectorAll(".mode-card").forEach((button) => {
         button.addEventListener("click", () => {
             wizardState.mode = button.dataset.mode;
+            wizardMeta.modeEdited = true;
             if (wizardState.mode === "time") {
                 wizardState.unitName = "horas";
             } else if (!wizardMeta.unitNameEdited) {
-                wizardState.unitName = suggestFromIntent(wizardState.intentText).unitName;
+                const suggestion = suggestGoalConfig(wizardState.intentText, wizardState.mode, {
+                    unitName: wizardState.unitName,
+                    daysPerWeek: wizardState.daysPerWeek,
+                    minutesPerSession: wizardState.minutesPerSession,
+                    rateValuePerHour: wizardState.rateValuePerHour,
+                    modeEdited: wizardMeta.modeEdited,
+                    useAutoTarget: wizardState.targetAuto
+                });
+                wizardState.unitName = suggestion.unitName || wizardState.unitName;
             }
             updateWizardModeUI();
+            applyIntentSuggestions();
             const steps = getActiveWizardSteps();
             if (!steps.includes(wizardStep)) {
                 wizardStep = steps[steps.length - 1];
@@ -809,7 +1090,28 @@ function initApp() {
             wizardState.daysPerWeek = Array.from(dom.wizardSteps.querySelectorAll(".day-checkbox:checked")).map(
                 (chk) => parseInt(chk.value, 10)
             );
+            applyIntentSuggestions();
             updateWizardButtons();
+            updateWizardSummary();
+        });
+    });
+
+    if (dom.wizardTargetAuto) {
+        dom.wizardTargetAuto.addEventListener("click", () => {
+            wizardState.targetAuto = !wizardState.targetAuto;
+            if (wizardState.targetAuto) {
+                applyIntentSuggestions();
+            }
+            updateWizardTargetAutoUI();
+            updateWizardButtons();
+            updateWizardSummary();
+        });
+    }
+
+    dom.wizardSteps.querySelectorAll(".pace-card").forEach((button) => {
+        button.addEventListener("click", () => {
+            wizardState.paceStyle = button.dataset.pace;
+            updateWizardPaceUI();
             updateWizardSummary();
         });
     });
