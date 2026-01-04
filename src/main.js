@@ -1,46 +1,27 @@
+import { appState } from "./core/state.js";
+import {
+    KEYS,
+    LEGACY_KEYS,
+    LEGACY_PROJECT_KEYS,
+    loadCurrentGoalId,
+    loadGoals,
+    loadSessionsByGoal,
+    saveCurrentGoalId,
+    saveGoals,
+    saveSessionsByGoal
+} from "./core/storage.js";
+import { DEFAULT_GOAL, normalizeGoal } from "./models/goals.js";
+import { calculateETA, calculateEtaDays, formatFutureDate } from "./models/metrics.js";
+import { normalizeSessions } from "./models/sessions.js";
+import { today } from "./utils/dates.js";
+import { renderDashboard } from "./ui/dashboard.js";
+import { initDashboardNav } from "./ui/nav.js";
+
 /* GOAL TRACKER APP
     Versión: 2.2 (Universal Goal Model)
 */
 
 // --- 1. CONFIGURACIÓN Y MODELO DE DATOS ---
-
-const KEYS = {
-    GOALS: "writerDashboard_goals",
-    CURRENT_GOAL_ID: "writerDashboard_current_goal_id",
-    SESSIONS: "writerDashboard_sessions_by_goal"
-};
-
-const LEGACY_KEYS = {
-    GOAL: "writerDashboard_goal",
-    SESSIONS: "writerDashboard_sessions"
-};
-
-const LEGACY_PROJECT_KEYS = {
-    GOAL: "writerDashboard_project",
-    SESSIONS: "writerDashboard_sessions_proj_001"
-};
-
-const DEFAULT_GOAL = {
-    id: "goal_default",
-    title: "Mi Nueva Meta",
-    name: "Mi Nueva Meta",
-    type: "generic",
-    paceMode: "pace",
-    targetValue: 50000,
-    target: 50000,
-    mode: "units",
-    unitName: "sesiones",
-    startDate: new Date().toISOString().split("T")[0],
-    plan: {
-        daysPerWeek: [1, 2, 3, 4, 5], // 1=Lun ... 6=Sab, 0=Dom
-        minutesPerSession: 60
-    },
-    scheduleDays: [1, 2, 3, 4, 5],
-    minutesPerSession: 60,
-    rate: {
-        valuePerHour: 500
-    }
-};
 
 let goals = [];
 let currentGoalId = DEFAULT_GOAL.id;
@@ -49,11 +30,6 @@ let sessions = [];
 let sessionsByGoalId = {};
 let smartIntentText = "";
 let wizardMode = "edit";
-let appState = {
-    view: "dashboard",
-    selectedGoalId: null,
-    dashboardMode: "vision"
-};
 
 const DEFAULT_WIZARD_STATE = {
     smartIntentText: "",
@@ -137,52 +113,6 @@ const dom = {
 
 // --- 3. DATOS Y MIGRACIONES ---
 
-function normalizeGoal(rawGoal = {}) {
-    const mode = rawGoal.mode || DEFAULT_GOAL.mode;
-    const title = rawGoal.title || rawGoal.name || DEFAULT_GOAL.title;
-    const type = rawGoal.type || DEFAULT_GOAL.type;
-    const paceMode = rawGoal.paceMode || DEFAULT_GOAL.paceMode;
-    const startDate = rawGoal.startDate || DEFAULT_GOAL.startDate;
-    const deadlineDate = rawGoal.deadlineDate || rawGoal.deadline || null;
-    const rawTargetValue = Number(rawGoal.targetValue ?? rawGoal.target ?? DEFAULT_GOAL.targetValue);
-    const targetValue = Number.isFinite(rawTargetValue) ? rawTargetValue : DEFAULT_GOAL.targetValue;
-    const rawUnitName = rawGoal.unitName || (mode === "time" ? "horas" : DEFAULT_GOAL.unitName);
-    const unitName = rawUnitName === "unidades" ? "sesiones" : rawUnitName;
-    const planDays = Array.isArray(rawGoal.plan?.daysPerWeek)
-        ? rawGoal.plan.daysPerWeek
-        : (Array.isArray(rawGoal.scheduleDays) ? rawGoal.scheduleDays : DEFAULT_GOAL.plan.daysPerWeek);
-    const rawPlanMinutes = Number(
-        rawGoal.plan?.minutesPerSession ?? rawGoal.minutesPerSession ?? DEFAULT_GOAL.plan.minutesPerSession
-    );
-    const planMinutes = Number.isFinite(rawPlanMinutes) ? rawPlanMinutes : DEFAULT_GOAL.plan.minutesPerSession;
-    const rawRateValue = Number(rawGoal.rate?.valuePerHour ?? rawGoal.rate ?? DEFAULT_GOAL.rate.valuePerHour);
-    const rateValuePerHour = Number.isFinite(rawRateValue) ? rawRateValue : DEFAULT_GOAL.rate.valuePerHour;
-
-    return {
-        ...DEFAULT_GOAL,
-        id: rawGoal.id || DEFAULT_GOAL.id,
-        title,
-        name: title,
-        type,
-        paceMode,
-        targetValue,
-        target: targetValue,
-        mode,
-        unitName,
-        startDate,
-        deadlineDate,
-        plan: {
-            daysPerWeek: planDays,
-            minutesPerSession: planMinutes
-        },
-        scheduleDays: planDays,
-        minutesPerSession: planMinutes,
-        rate: {
-            valuePerHour: rateValuePerHour
-        }
-    };
-}
-
 function migrateStorageIfNeeded() {
     const hasGoals = localStorage.getItem(KEYS.GOALS);
     const hasSessions = localStorage.getItem(KEYS.SESSIONS);
@@ -244,51 +174,15 @@ function migrateStorageIfNeeded() {
     }
 }
 
-function normalizeSessions(sessionList) {
-    if (!Array.isArray(sessionList)) return [];
-    return sessionList.map((session) => ({
-        id: session.id || Date.now(),
-        date: session.date || new Date().toISOString().split("T")[0],
-        minutes: Number(session.minutes) || 0,
-        value: typeof session.value === "number" ? session.value : session.value ?? null,
-        isEstimated: Boolean(session.isEstimated)
-    }));
-}
-
 function loadData() {
-    const goalsStr = localStorage.getItem(KEYS.GOALS);
-    if (!goalsStr) {
-        goals = [normalizeGoal(DEFAULT_GOAL)];
-    } else {
-        try {
-            const parsed = JSON.parse(goalsStr);
-            goals = Array.isArray(parsed) ? parsed.map((goal) => normalizeGoal(goal)) : [normalizeGoal(DEFAULT_GOAL)];
-        } catch (error) {
-            console.error(error);
-            goals = [normalizeGoal(DEFAULT_GOAL)];
-        }
-    }
+    const storedGoals = loadGoals();
+    goals = storedGoals.length ? storedGoals.map((goal) => normalizeGoal(goal)) : [normalizeGoal(DEFAULT_GOAL)];
 
-    const storedGoalId = localStorage.getItem(KEYS.CURRENT_GOAL_ID);
+    const storedGoalId = loadCurrentGoalId();
     currentGoalId = goals.some((goal) => goal.id === storedGoalId) ? storedGoalId : goals[0].id;
     currentGoal = normalizeGoal(goals.find((goal) => goal.id === currentGoalId));
 
-    const sessionsStr = localStorage.getItem(KEYS.SESSIONS);
-    if (sessionsStr) {
-        try {
-            const parsedSessions = JSON.parse(sessionsStr);
-            if (Array.isArray(parsedSessions)) {
-                sessionsByGoalId = { [currentGoalId]: parsedSessions };
-            } else {
-                sessionsByGoalId = typeof parsedSessions === "object" && parsedSessions !== null ? parsedSessions : {};
-            }
-        } catch (error) {
-            console.error(error);
-            sessionsByGoalId = {};
-        }
-    } else {
-        sessionsByGoalId = {};
-    }
+    sessionsByGoalId = loadSessionsByGoal();
 
     Object.keys(sessionsByGoalId).forEach((goalId) => {
         sessionsByGoalId[goalId] = normalizeSessions(sessionsByGoalId[goalId]);
@@ -306,120 +200,9 @@ function saveData() {
     }
     sessionsByGoalId[currentGoal.id] = sessions;
 
-    localStorage.setItem(KEYS.GOALS, JSON.stringify(goals));
-    localStorage.setItem(KEYS.CURRENT_GOAL_ID, currentGoal.id);
-    localStorage.setItem(KEYS.SESSIONS, JSON.stringify(sessionsByGoalId));
-}
-
-// --- 4. LÓGICA DE NEGOCIO (Cálculos) ---
-
-function getStats(goal = currentGoal, sessionsList = sessions) {
-    let totalUnits = 0;
-    let totalMinutes = 0;
-
-    sessionsList.forEach((session) => {
-        totalMinutes += session.minutes;
-
-        if (goal.mode === "time") {
-            totalUnits += session.minutes / 60;
-            return;
-        }
-
-        if (typeof session.value === "number") {
-            totalUnits += session.value;
-            return;
-        }
-
-        const rate = goal.rate.valuePerHour;
-        if (rate > 0 && session.minutes > 0) {
-            totalUnits += Math.floor((session.minutes / 60) * rate);
-        }
-    });
-
-    const percent = goal.targetValue > 0
-        ? Math.min(100, Math.floor((totalUnits / goal.targetValue) * 100))
-        : 0;
-
-    const averageRate = goal.mode !== "time" && totalMinutes > 0
-        ? Math.floor(totalUnits / (totalMinutes / 60))
-        : goal.rate.valuePerHour;
-
-    return { totalUnits, totalMinutes, percent, averageRate };
-}
-
-function getWeeklyStats() {
-    const now = new Date();
-    const weekStart = new Date(now);
-    const day = weekStart.getDay();
-    const diff = (day === 0 ? -6 : 1) - day;
-    weekStart.setDate(weekStart.getDate() + diff);
-    weekStart.setHours(0, 0, 0, 0);
-
-    let completedSessions = 0;
-    let totalMinutes = 0;
-    let totalUnits = 0;
-
-    sessions.forEach((session) => {
-        const sessionDate = new Date(`${session.date}T00:00:00`);
-        if (sessionDate >= weekStart) {
-            completedSessions += 1;
-            totalMinutes += session.minutes;
-
-            if (currentGoal.mode === "time") {
-                totalUnits += session.minutes / 60;
-            } else if (typeof session.value === "number") {
-                totalUnits += session.value;
-            } else if (currentGoal.rate.valuePerHour > 0 && session.minutes > 0) {
-                totalUnits += Math.floor((session.minutes / 60) * currentGoal.rate.valuePerHour);
-            }
-        }
-    });
-
-    return {
-        completedSessions,
-        plannedSessions: currentGoal.plan.daysPerWeek.length,
-        totalMinutes,
-        totalUnits
-    };
-}
-
-function calculateETA(paceModifier = 1, goal = currentGoal) {
-    const stats = getStats(goal);
-    const remainingUnits = goal.targetValue - stats.totalUnits;
-
-    if (remainingUnits <= 0) {
-        return "¡Completado!";
-    }
-
-    const sessionsPerWeek = goal.plan.daysPerWeek.length;
-    const minutesPerSession = goal.plan.minutesPerSession;
-
-    if (goal.mode === "time") {
-        const minutesPerWeek = minutesPerSession * sessionsPerWeek * paceModifier;
-        if (minutesPerWeek <= 0) {
-            return "Configura tu ritmo";
-        }
-        const weeksNeeded = (remainingUnits * 60) / minutesPerWeek;
-        return formatFutureDate(Math.ceil(weeksNeeded * 7));
-    }
-
-    const rateToUse = stats.averageRate > 0 ? stats.averageRate : goal.rate.valuePerHour;
-    const unitsPerSession = (rateToUse * (minutesPerSession / 60)) * paceModifier;
-
-    if (unitsPerSession <= 0 || sessionsPerWeek <= 0) {
-        return "Configura tu ritmo";
-    }
-
-    const unitsPerWeek = unitsPerSession * sessionsPerWeek;
-    const weeksNeeded = remainingUnits / unitsPerWeek;
-    return formatFutureDate(Math.ceil(weeksNeeded * 7));
-}
-
-function formatFutureDate(daysToAdd) {
-    const today = new Date();
-    const targetDate = new Date(today);
-    targetDate.setDate(today.getDate() + daysToAdd);
-    return targetDate.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
+    saveGoals(goals);
+    saveCurrentGoalId(currentGoal.id);
+    saveSessionsByGoal(sessionsByGoalId);
 }
 
 function stripAccents(text) {
@@ -546,230 +329,6 @@ function parseIntent(text) {
     };
 }
 
-function calculateEtaDays(goal, paceModifier = 1, sessionsOverride = null, sessionsList = sessions) {
-    const stats = getStats(goal, sessionsList);
-    const remainingUnits = goal.targetValue - stats.totalUnits;
-
-    if (remainingUnits <= 0) {
-        return 0;
-    }
-
-    const sessionsPerWeek = sessionsOverride ?? goal.plan.daysPerWeek.length;
-    const minutesPerSession = goal.plan.minutesPerSession;
-
-    if (goal.mode === "time") {
-        const minutesPerWeek = minutesPerSession * sessionsPerWeek * paceModifier;
-        if (minutesPerWeek <= 0) {
-            return null;
-        }
-        const weeksNeeded = (remainingUnits * 60) / minutesPerWeek;
-        return Math.ceil(weeksNeeded * 7);
-    }
-
-    const rateToUse = stats.averageRate > 0 ? stats.averageRate : goal.rate.valuePerHour;
-    const unitsPerSession = (rateToUse * (minutesPerSession / 60)) * paceModifier;
-    if (unitsPerSession <= 0 || sessionsPerWeek <= 0) {
-        return null;
-    }
-    const unitsPerWeek = unitsPerSession * sessionsPerWeek;
-    const weeksNeeded = remainingUnits / unitsPerWeek;
-    return Math.ceil(weeksNeeded * 7);
-}
-
-function getGoalProgress(goal, sessionsForGoal = []) {
-    let totalMinutes = 0;
-    let totalValue = 0;
-
-    sessionsForGoal.forEach((session) => {
-        totalMinutes += session.minutes;
-
-        if (goal.mode === "time") {
-            totalValue += session.minutes / 60;
-            return;
-        }
-
-        if (typeof session.value === "number") {
-            totalValue += session.value;
-            return;
-        }
-
-        const rate = goal.rate?.valuePerHour ?? 0;
-        if (rate > 0 && session.minutes > 0) {
-            totalValue += Math.floor((session.minutes / 60) * rate);
-        }
-    });
-
-    let progressPercent = 0;
-    if (goal.mode === "time") {
-        if (goal.targetValue) {
-            progressPercent = (totalMinutes / (goal.targetValue * 60)) * 100;
-        } else {
-            const baseline = goal.plan.minutesPerSession * Math.max(1, goal.plan.daysPerWeek.length) * 4;
-            progressPercent = baseline > 0 ? (totalMinutes / baseline) * 100 : 0;
-        }
-    } else if (goal.targetValue) {
-        progressPercent = (totalValue / goal.targetValue) * 100;
-    } else {
-        progressPercent = Math.min(100, sessionsForGoal.length * 10);
-    }
-
-    return {
-        progressPercent: Math.min(100, Math.max(0, Math.round(progressPercent))),
-        totalMinutes,
-        totalValue
-    };
-}
-
-function getGoalStatus(goal, progressInfo, todayDate) {
-    const labels = {
-        "on-track": "En ruta",
-        "warning": "Un pequeño empujón",
-        "behind": "Vamos a rescatar esta meta"
-    };
-    const colors = {
-        "on-track": "status-on-track",
-        "warning": "status-warning",
-        "behind": "status-behind"
-    };
-
-    let status = "on-track";
-    let etaText = "A tu ritmo";
-
-    if (goal.deadlineDate) {
-        const startDate = new Date(`${goal.startDate || todayDate}T00:00:00`);
-        const deadlineDate = new Date(`${goal.deadlineDate}T00:00:00`);
-        const totalDays = Math.max(1, Math.round((deadlineDate - startDate) / 86400000));
-        const elapsedDays = Math.min(totalDays, Math.max(0, Math.round((todayDate - startDate) / 86400000)));
-        const expectedProgress = (elapsedDays / totalDays) * 100;
-
-        if (progressInfo.progressPercent >= expectedProgress - 5) {
-            status = "on-track";
-        } else if (progressInfo.progressPercent >= expectedProgress - 15) {
-            status = "warning";
-        } else {
-            status = "behind";
-        }
-
-        etaText = progressInfo.progressPercent >= 100
-            ? "Meta cumplida 🎉"
-            : `Terminas aprox el ${formatShortDate(goal.deadlineDate)}`;
-    } else {
-        const sessionsForGoal = sessionsByGoalId[goal.id] || [];
-        const lastSession = sessionsForGoal[0];
-        const plannedSessions = Math.max(1, goal.plan.daysPerWeek.length || 1);
-        const expectedGap = Math.max(1, Math.floor(7 / plannedSessions));
-        if (!lastSession) {
-            status = "warning";
-        } else {
-            const lastDate = new Date(`${lastSession.date}T00:00:00`);
-            const daysSince = Math.round((todayDate - lastDate) / 86400000);
-            if (daysSince > expectedGap * 2) {
-                status = "behind";
-            } else if (daysSince > expectedGap) {
-                status = "warning";
-            }
-        }
-    }
-
-    return {
-        status,
-        label: labels[status],
-        colorClass: colors[status],
-        etaText
-    };
-}
-
-function isTodayWorkDay(goal, todayDate) {
-    const planDays = goal.plan?.daysPerWeek;
-    if (!Array.isArray(planDays) || planDays.length === 0) {
-        return false;
-    }
-
-    const dayIndex = todayDate.getDay();
-    const letterMap = {
-        L: 1,
-        M: 2,
-        X: 3,
-        J: 4,
-        V: 5,
-        S: 6,
-        D: 0
-    };
-
-    return planDays.some((day) => {
-        if (typeof day === "number") {
-            const normalized = day === 7 ? 0 : day;
-            return normalized === dayIndex || (dayIndex === 0 && day === 0);
-        }
-        if (typeof day === "string") {
-            const key = day.trim().toUpperCase();
-            return letterMap[key] === dayIndex;
-        }
-        return false;
-    });
-}
-
-function getTodaySummaryForGoal(goal, sessionsForGoal, todayDate) {
-    const todayKey = todayDate.toISOString().split("T")[0];
-    const todaySessions = sessionsForGoal.filter((session) => session.date === todayKey);
-    const completedMinutes = todaySessions.reduce((acc, session) => acc + session.minutes, 0);
-    const isWorkDay = isTodayWorkDay(goal, todayDate);
-    const plannedMinutes = isWorkDay ? (goal.plan?.minutesPerSession || 0) : 0;
-    const remainingMinutes = Math.max(plannedMinutes - completedMinutes, 0);
-
-    let suggestionText = "Hoy es día libre para esta meta.";
-    if (isWorkDay) {
-        suggestionText = remainingMinutes > 0
-            ? `Te faltan ~${remainingMinutes} min para cumplir lo de hoy.`
-            : "Meta diaria cumplida 🎉";
-    }
-
-    return {
-        plannedMinutes,
-        completedMinutes,
-        remainingMinutes,
-        suggestionText
-    };
-}
-
-function getTodayItems(goalsList, sessionsMap, todayDate) {
-    return goalsList.map((goal) => {
-        const sessionsForGoal = sessionsMap[goal.id] || [];
-        const summary = getTodaySummaryForGoal(goal, sessionsForGoal, todayDate);
-        const progressInfo = getGoalProgress(goal, sessionsForGoal);
-        const status = getGoalStatus(goal, progressInfo, todayDate);
-
-        return {
-            goalId: goal.id,
-            goalTitle: goal.title,
-            type: goal.type,
-            status: status.status,
-            isTodayWorkDay: summary.plannedMinutes > 0,
-            plannedMinutes: summary.plannedMinutes,
-            completedMinutes: summary.completedMinutes,
-            remainingMinutes: summary.remainingMinutes,
-            suggestionText: summary.suggestionText
-        };
-    });
-}
-
-function formatShortDate(dateString) {
-    if (!dateString) return "";
-    const date = new Date(`${dateString}T00:00:00`);
-    return date.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" });
-}
-
-function getGoalTypeLabel(type) {
-    const map = {
-        reading: "📖 Lectura",
-        fitness: "🏃 Fitness",
-        study: "📚 Estudio",
-        habit: "✨ Hábito",
-        generic: "🎯 Meta"
-    };
-    return map[type] || "🎯 Meta";
-}
-
 function setCurrentGoalById(goalId) {
     const targetGoal = goals.find((goal) => goal.id === goalId);
     if (!targetGoal) return;
@@ -777,176 +336,9 @@ function setCurrentGoalById(goalId) {
     currentGoal = normalizeGoal(targetGoal);
     sessions = normalizeSessions(sessionsByGoalId[goalId]);
     appState.selectedGoalId = goalId;
-    localStorage.setItem(KEYS.CURRENT_GOAL_ID, goalId);
+    saveCurrentGoalId(goalId);
     renderDashboard();
     renderScenarios();
-}
-
-function setDashboardMode(mode) {
-    appState.dashboardMode = mode;
-    renderDashboardMode();
-}
-
-// --- 5. RENDERIZADO ---
-
-function renderDashboard() {
-    const stats = getStats();
-    const weeklyStats = getWeeklyStats();
-    const fmt = new Intl.NumberFormat("es-ES");
-    const formatValue = (value) => (
-        currentGoal.mode === "time"
-            ? fmt.format(Number(value.toFixed(1)))
-            : fmt.format(Math.floor(value))
-    );
-
-    const unitLabel = currentGoal.unitName;
-
-    dom.projectName.textContent = currentGoal.title;
-    dom.wordsProgress.textContent = `${formatValue(stats.totalUnits)} / ${formatValue(currentGoal.targetValue)} ${unitLabel}`;
-    dom.percentProgress.textContent = `${stats.percent}%`;
-    dom.progressBar.style.width = `${stats.percent}%`;
-    dom.etaDate.textContent = calculateETA(1);
-
-    dom.settingGoal.textContent = `${formatValue(currentGoal.targetValue)} ${unitLabel}`;
-    dom.settingDays.textContent = `${currentGoal.plan.daysPerWeek.length} días/sem`;
-    dom.settingHours.textContent = `${(currentGoal.plan.minutesPerSession / 60).toFixed(2).replace(/\\.00$/, "")}h/sesión`;
-
-    if (currentGoal.mode !== "time") {
-        const speedLabel = stats.totalMinutes > 0 ? "Real" : "Est.";
-        const speedValue = stats.totalMinutes > 0 ? stats.averageRate : currentGoal.rate.valuePerHour;
-        dom.settingWph.textContent = `${fmt.format(speedValue)} ${unitLabel}/h (${speedLabel})`;
-    } else {
-        dom.settingWph.textContent = "N/D";
-    }
-
-    dom.weeklySessions.textContent = `${weeklyStats.completedSessions} / ${weeklyStats.plannedSessions}`;
-    dom.weeklyTime.textContent = `${(weeklyStats.totalMinutes / 60).toFixed(1).replace(/\\.0$/, "")}h`;
-    dom.weeklyUnits.textContent = formatValue(weeklyStats.totalUnits);
-    dom.weeklyUnitsLabel.textContent = unitLabel;
-
-    renderDashboardMode();
-}
-
-function renderDashboardMode() {
-    if (!dom.dashboardVisionPanel || !dom.dashboardTodayPanel) return;
-    const isVision = appState.dashboardMode === "vision";
-    dom.dashboardVisionPanel.classList.toggle("is-active", isVision);
-    dom.dashboardTodayPanel.classList.toggle("is-active", !isVision);
-    dom.btnDashboardVision?.classList.toggle("is-active", isVision);
-    dom.btnDashboardToday?.classList.toggle("is-active", !isVision);
-
-    if (isVision) {
-        renderVisionBoard();
-    } else {
-        renderTodayBoard();
-    }
-}
-
-function renderVisionBoard() {
-    const todayDate = new Date();
-    if (!goals.length) {
-        dom.dashboardVisionPanel.innerHTML = `<div class="empty-state">Crea tu primera meta para empezar.</div>`;
-        return;
-    }
-
-    const cards = goals.map((goal) => {
-        const goalSessions = sessionsByGoalId[goal.id] || [];
-        const progress = getGoalProgress(goal, goalSessions);
-        const status = getGoalStatus(goal, progress, todayDate);
-        const isSelected = appState.selectedGoalId === goal.id;
-
-        return `
-            <article class="card goal-card ${isSelected ? "is-selected" : ""}" data-goal-id="${goal.id}">
-                <div class="goal-card-header">
-                    <div>
-                        <div class="goal-type">${getGoalTypeLabel(goal.type)}</div>
-                        <h3>${goal.title}</h3>
-                    </div>
-                    <div class="goal-progress" style="--progress: ${progress.progressPercent};">
-                        ${progress.progressPercent}%
-                    </div>
-                </div>
-                <div class="goal-status ${status.colorClass}">
-                    ${status.label}
-                </div>
-                <div class="goal-eta">${status.etaText}</div>
-            </article>
-        `;
-    }).join("");
-
-    dom.dashboardVisionPanel.innerHTML = `<div class="vision-grid">${cards}</div>`;
-
-    dom.dashboardVisionPanel.querySelectorAll(".goal-card").forEach((card) => {
-        card.addEventListener("click", () => {
-            const goalId = card.getAttribute("data-goal-id");
-            if (goalId) {
-                setCurrentGoalById(goalId);
-            }
-        });
-    });
-}
-
-function renderTodayBoard() {
-    const todayDate = new Date();
-    if (!goals.length) {
-        dom.dashboardTodayPanel.innerHTML = `<div class="empty-state">Crea tu primera meta para empezar.</div>`;
-        return;
-    }
-
-    const items = getTodayItems(goals, sessionsByGoalId, todayDate);
-    const hasActiveDay = items.some((item) => item.plannedMinutes > 0);
-
-    const header = `
-        <div class="today-header">
-            <h3>Hoy</h3>
-            <p class="card-subtitle">Lo que realmente importa hoy.</p>
-        </div>
-    `;
-
-    const list = items.map((item) => `
-        <div class="today-item" data-goal-id="${item.goalId}">
-            <div class="today-item-header">
-                <div>
-                    <div class="goal-type">${getGoalTypeLabel(item.type)}</div>
-                    <div class="today-title" data-select-goal="${item.goalId}">${item.goalTitle}</div>
-                </div>
-                <div class="today-progress">
-                    <span class="today-chip">${item.completedMinutes} / ${item.plannedMinutes} min</span>
-                    <span>${item.isTodayWorkDay ? "Día activo" : "Día libre"}</span>
-                </div>
-            </div>
-            <div class="goal-status status-${item.status}">${item.suggestionText}</div>
-            <div class="today-actions">
-                <button class="btn btn-secondary" data-add-minutes="15" data-goal-id="${item.goalId}">+15 min</button>
-                <button class="btn btn-secondary" data-add-minutes="30" data-goal-id="${item.goalId}">+30 min</button>
-            </div>
-        </div>
-    `).join("");
-
-    const restMessage = !hasActiveDay
-        ? `<div class="empty-state">Hoy toca descansar o revisar tus metas.</div>`
-        : "";
-
-    dom.dashboardTodayPanel.innerHTML = `${header}<div class="today-list">${list}</div>${restMessage}`;
-
-    dom.dashboardTodayPanel.querySelectorAll("[data-add-minutes]").forEach((button) => {
-        button.addEventListener("click", (event) => {
-            const goalId = event.currentTarget.getAttribute("data-goal-id");
-            const minutes = Number(event.currentTarget.getAttribute("data-add-minutes"));
-            if (!goalId || !Number.isFinite(minutes)) return;
-            addQuickSession(goalId, minutes);
-        });
-    });
-
-    dom.dashboardTodayPanel.querySelectorAll("[data-select-goal]").forEach((el) => {
-        el.addEventListener("click", (event) => {
-            const goalId = event.currentTarget.getAttribute("data-select-goal");
-            if (goalId) {
-                appState.dashboardMode = "vision";
-                setCurrentGoalById(goalId);
-            }
-        });
-    });
 }
 
 function renderScenarios() {
@@ -958,7 +350,7 @@ function renderScenarios() {
         if (!dateEl || !descEl) return;
 
         const modifier = modifiers[index] ?? 1;
-        dateEl.textContent = calculateETA(modifier);
+        dateEl.textContent = calculateETA(currentGoal, sessions, modifier);
         if (modifier < 1) descEl.textContent = "-20% intensidad";
         if (modifier === 1) descEl.textContent = "Basado en tu histórico";
         if (modifier > 1) descEl.textContent = "+20% intensidad";
@@ -1891,15 +1283,18 @@ function updateSmartCreateMessage(showMessage) {
 function initApp() {
     migrateStorageIfNeeded();
     loadData();
+    appState.today = today();
+    appState.view = "dashboard";
+    appState.dashboardMode = "vision";
+
     renderDashboard();
     renderScenarios();
+    initDashboardNav();
 
-    if (dom.btnDashboardVision) {
-        dom.btnDashboardVision.addEventListener("click", () => setDashboardMode("vision"));
-    }
-    if (dom.btnDashboardToday) {
-        dom.btnDashboardToday.addEventListener("click", () => setDashboardMode("today"));
-    }
+    document.addEventListener("sessions:updated", () => {
+        loadData();
+        renderScenarios();
+    });
 
     dom.btnLogSession.addEventListener("click", openLogModal);
     dom.btnCloseSessionModal.addEventListener("click", closeLogModal);
