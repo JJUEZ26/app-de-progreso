@@ -1,5 +1,5 @@
-/* WRITER'S DASHBOARD APP
-    Versión: 2.1 (Bugfix & Enhanced Logic)
+/* GOAL TRACKER APP
+    Versión: 2.2 (Universal Goal Model)
 */
 
 // --- 1. CONFIGURACIÓN Y MODELO DE DATOS ---
@@ -16,16 +16,25 @@ const LEGACY_KEYS = {
 
 const DEFAULT_GOAL = {
     id: "goal_default",
-    name: "Mi Nuevo Proyecto",
+    title: "Mi Nueva Meta",
+    name: "Mi Nueva Meta",
+    targetValue: 50000,
     target: 50000,
     mode: "units",
+    unitName: "unidades",
     startDate: new Date().toISOString().split("T")[0],
-    scheduleDays: [1, 2, 3, 4, 5], // 1=Lun ... 6=Sab, 0=Dom
+    plan: {
+        daysPerWeek: [1, 2, 3, 4, 5], // 1=Lun ... 6=Sab, 0=Dom
+        minutesPerSession: 60
+    },
+    scheduleDays: [1, 2, 3, 4, 5],
     minutesPerSession: 60,
-    rate: 500
+    rate: {
+        valuePerHour: 500
+    }
 };
 
-let currentGoal = { ...DEFAULT_GOAL };
+let currentGoal = normalizeGoal(DEFAULT_GOAL);
 let sessions = [];
 
 // --- 2. REFERENCIAS AL DOM ---
@@ -45,6 +54,7 @@ const dom = {
     weeklySessions: document.getElementById("weekly-sessions"),
     weeklyTime: document.getElementById("weekly-time"),
     weeklyUnits: document.getElementById("weekly-units"),
+    weeklyUnitsLabel: document.getElementById("weekly-units-label"),
 
     btnLogSession: document.getElementById("btn-log-session"),
     btnExplore: document.getElementById("btn-explore-scenarios"),
@@ -69,6 +79,43 @@ const dom = {
 
 // --- 3. DATOS Y MIGRACIONES ---
 
+function normalizeGoal(rawGoal = {}) {
+    const mode = rawGoal.mode || DEFAULT_GOAL.mode;
+    const title = rawGoal.title || rawGoal.name || DEFAULT_GOAL.title;
+    const rawTargetValue = Number(rawGoal.targetValue ?? rawGoal.target ?? DEFAULT_GOAL.targetValue);
+    const targetValue = Number.isFinite(rawTargetValue) ? rawTargetValue : DEFAULT_GOAL.targetValue;
+    const unitName = rawGoal.unitName || (mode === "time" ? "horas" : DEFAULT_GOAL.unitName);
+    const planDays = Array.isArray(rawGoal.plan?.daysPerWeek)
+        ? rawGoal.plan.daysPerWeek
+        : (Array.isArray(rawGoal.scheduleDays) ? rawGoal.scheduleDays : DEFAULT_GOAL.plan.daysPerWeek);
+    const rawPlanMinutes = Number(
+        rawGoal.plan?.minutesPerSession ?? rawGoal.minutesPerSession ?? DEFAULT_GOAL.plan.minutesPerSession
+    );
+    const planMinutes = Number.isFinite(rawPlanMinutes) ? rawPlanMinutes : DEFAULT_GOAL.plan.minutesPerSession;
+    const rawRateValue = Number(rawGoal.rate?.valuePerHour ?? rawGoal.rate ?? DEFAULT_GOAL.rate.valuePerHour);
+    const rateValuePerHour = Number.isFinite(rawRateValue) ? rawRateValue : DEFAULT_GOAL.rate.valuePerHour;
+
+    return {
+        ...DEFAULT_GOAL,
+        id: rawGoal.id || DEFAULT_GOAL.id,
+        title,
+        name: title,
+        targetValue,
+        target: targetValue,
+        mode,
+        unitName,
+        plan: {
+            daysPerWeek: planDays,
+            minutesPerSession: planMinutes
+        },
+        scheduleDays: planDays,
+        minutesPerSession: planMinutes,
+        rate: {
+            valuePerHour: rateValuePerHour
+        }
+    };
+}
+
 function migrateStorageIfNeeded() {
     const hasGoal = localStorage.getItem(KEYS.GOAL);
     const hasSessions = localStorage.getItem(KEYS.SESSIONS);
@@ -78,16 +125,19 @@ function migrateStorageIfNeeded() {
         if (legacyGoalStr) {
             try {
                 const legacyGoal = JSON.parse(legacyGoalStr);
-                const migratedGoal = {
-                    ...DEFAULT_GOAL,
-                    name: legacyGoal.name || DEFAULT_GOAL.name,
-                    target: legacyGoal.targetWords || DEFAULT_GOAL.target,
-                    scheduleDays: legacyGoal.schedule?.workDays || DEFAULT_GOAL.scheduleDays,
-                    minutesPerSession: Math.round(
-                        (legacyGoal.schedule?.hoursPerSession || DEFAULT_GOAL.minutesPerSession / 60) * 60
-                    ),
-                    rate: legacyGoal.schedule?.wordsPerHour || DEFAULT_GOAL.rate
-                };
+                const migratedGoal = normalizeGoal({
+                    title: legacyGoal.name || DEFAULT_GOAL.title,
+                    targetValue: legacyGoal.targetWords || DEFAULT_GOAL.targetValue,
+                    plan: {
+                        daysPerWeek: legacyGoal.schedule?.workDays || DEFAULT_GOAL.plan.daysPerWeek,
+                        minutesPerSession: Math.round(
+                            (legacyGoal.schedule?.hoursPerSession || DEFAULT_GOAL.plan.minutesPerSession / 60) * 60
+                        )
+                    },
+                    rate: {
+                        valuePerHour: legacyGoal.schedule?.wordsPerHour || DEFAULT_GOAL.rate.valuePerHour
+                    }
+                });
                 localStorage.setItem(KEYS.GOAL, JSON.stringify(migratedGoal));
             } catch (error) {
                 console.error(error);
@@ -120,19 +170,14 @@ function migrateStorageIfNeeded() {
 function loadData() {
     const goalStr = localStorage.getItem(KEYS.GOAL);
     if (!goalStr) {
-        currentGoal = { ...DEFAULT_GOAL };
+        currentGoal = normalizeGoal(DEFAULT_GOAL);
     } else {
         try {
             const parsed = JSON.parse(goalStr);
-            currentGoal = {
-                ...DEFAULT_GOAL,
-                ...parsed,
-                mode: parsed.mode || "units",
-                scheduleDays: Array.isArray(parsed.scheduleDays) ? parsed.scheduleDays : DEFAULT_GOAL.scheduleDays
-            };
+            currentGoal = normalizeGoal(parsed);
         } catch (error) {
             console.error(error);
-            currentGoal = { ...DEFAULT_GOAL };
+            currentGoal = normalizeGoal(DEFAULT_GOAL);
         }
     }
 
@@ -173,7 +218,7 @@ function getStats() {
         totalMinutes += session.minutes;
 
         if (currentGoal.mode === "time") {
-            totalUnits += session.minutes;
+            totalUnits += session.minutes / 60;
             return;
         }
 
@@ -182,19 +227,19 @@ function getStats() {
             return;
         }
 
-        const rate = currentGoal.rate;
+        const rate = currentGoal.rate.valuePerHour;
         if (rate > 0 && session.minutes > 0) {
             totalUnits += Math.floor((session.minutes / 60) * rate);
         }
     });
 
-    const percent = currentGoal.target > 0
-        ? Math.min(100, Math.floor((totalUnits / currentGoal.target) * 100))
+    const percent = currentGoal.targetValue > 0
+        ? Math.min(100, Math.floor((totalUnits / currentGoal.targetValue) * 100))
         : 0;
 
-    const averageRate = totalMinutes > 0
+    const averageRate = currentGoal.mode === "units" && totalMinutes > 0
         ? Math.floor(totalUnits / (totalMinutes / 60))
-        : currentGoal.rate;
+        : currentGoal.rate.valuePerHour;
 
     return { totalUnits, totalMinutes, percent, averageRate };
 }
@@ -218,18 +263,18 @@ function getWeeklyStats() {
             totalMinutes += session.minutes;
 
             if (currentGoal.mode === "time") {
-                totalUnits += session.minutes;
+                totalUnits += session.minutes / 60;
             } else if (typeof session.value === "number") {
                 totalUnits += session.value;
-            } else if (currentGoal.rate > 0 && session.minutes > 0) {
-                totalUnits += Math.floor((session.minutes / 60) * currentGoal.rate);
+            } else if (currentGoal.rate.valuePerHour > 0 && session.minutes > 0) {
+                totalUnits += Math.floor((session.minutes / 60) * currentGoal.rate.valuePerHour);
             }
         }
     });
 
     return {
         completedSessions,
-        plannedSessions: currentGoal.scheduleDays.length,
+        plannedSessions: currentGoal.plan.daysPerWeek.length,
         totalMinutes,
         totalUnits
     };
@@ -237,33 +282,33 @@ function getWeeklyStats() {
 
 function calculateETA(paceModifier = 1) {
     const stats = getStats();
-    const remainingUnits = currentGoal.target - stats.totalUnits;
+    const remainingUnits = currentGoal.targetValue - stats.totalUnits;
 
     if (remainingUnits <= 0) {
         return "¡Completado!";
     }
 
-    const sessionsPerWeek = currentGoal.scheduleDays.length;
-    const minutesPerSession = currentGoal.minutesPerSession;
+    const sessionsPerWeek = currentGoal.plan.daysPerWeek.length;
+    const minutesPerSession = currentGoal.plan.minutesPerSession;
 
     if (currentGoal.mode === "time") {
         const minutesPerWeek = minutesPerSession * sessionsPerWeek * paceModifier;
         if (minutesPerWeek <= 0) {
             return "Configura tu ritmo";
         }
-        const weeksNeeded = remainingUnits / minutesPerWeek;
+        const weeksNeeded = (remainingUnits * 60) / minutesPerWeek;
         return formatFutureDate(Math.ceil(weeksNeeded * 7));
     }
 
-    const rateToUse = stats.averageRate > 0 ? stats.averageRate : currentGoal.rate;
-    const wordsPerSession = (rateToUse * (minutesPerSession / 60)) * paceModifier;
+    const rateToUse = stats.averageRate > 0 ? stats.averageRate : currentGoal.rate.valuePerHour;
+    const unitsPerSession = (rateToUse * (minutesPerSession / 60)) * paceModifier;
 
-    if (wordsPerSession <= 0 || sessionsPerWeek <= 0) {
+    if (unitsPerSession <= 0 || sessionsPerWeek <= 0) {
         return "Configura tu ritmo";
     }
 
-    const wordsPerWeek = wordsPerSession * sessionsPerWeek;
-    const weeksNeeded = remainingUnits / wordsPerWeek;
+    const unitsPerWeek = unitsPerSession * sessionsPerWeek;
+    const weeksNeeded = remainingUnits / unitsPerWeek;
     return formatFutureDate(Math.ceil(weeksNeeded * 7));
 }
 
@@ -280,23 +325,36 @@ function renderDashboard() {
     const stats = getStats();
     const weeklyStats = getWeeklyStats();
     const fmt = new Intl.NumberFormat("es-ES");
+    const formatValue = (value) => (
+        currentGoal.mode === "time"
+            ? fmt.format(Number(value.toFixed(1)))
+            : fmt.format(Math.floor(value))
+    );
 
-    dom.projectName.textContent = currentGoal.name;
-    dom.wordsProgress.textContent = `${fmt.format(stats.totalUnits)} / ${fmt.format(currentGoal.target)} palabras`;
+    const unitLabel = currentGoal.unitName;
+
+    dom.projectName.textContent = currentGoal.title;
+    dom.wordsProgress.textContent = `${formatValue(stats.totalUnits)} / ${formatValue(currentGoal.targetValue)} ${unitLabel}`;
     dom.percentProgress.textContent = `${stats.percent}%`;
     dom.progressBar.style.width = `${stats.percent}%`;
     dom.etaDate.textContent = calculateETA(1);
 
-    dom.settingGoal.textContent = fmt.format(currentGoal.target);
-    dom.settingDays.textContent = `${currentGoal.scheduleDays.length} días/sem`;
-    dom.settingHours.textContent = `${(currentGoal.minutesPerSession / 60).toFixed(2).replace(/\\.00$/, "")}h/sesión`;
-    const speedLabel = stats.totalMinutes > 0 ? "Real" : "Est.";
-    const speedValue = stats.totalMinutes > 0 ? stats.averageRate : currentGoal.rate;
-    dom.settingWph.textContent = `${fmt.format(speedValue)} pal/h (${speedLabel})`;
+    dom.settingGoal.textContent = `${formatValue(currentGoal.targetValue)} ${unitLabel}`;
+    dom.settingDays.textContent = `${currentGoal.plan.daysPerWeek.length} días/sem`;
+    dom.settingHours.textContent = `${(currentGoal.plan.minutesPerSession / 60).toFixed(2).replace(/\\.00$/, "")}h/sesión`;
+
+    if (currentGoal.mode === "units") {
+        const speedLabel = stats.totalMinutes > 0 ? "Real" : "Est.";
+        const speedValue = stats.totalMinutes > 0 ? stats.averageRate : currentGoal.rate.valuePerHour;
+        dom.settingWph.textContent = `${fmt.format(speedValue)} ${unitLabel}/h (${speedLabel})`;
+    } else {
+        dom.settingWph.textContent = "N/D";
+    }
 
     dom.weeklySessions.textContent = `${weeklyStats.completedSessions} / ${weeklyStats.plannedSessions}`;
     dom.weeklyTime.textContent = `${(weeklyStats.totalMinutes / 60).toFixed(1).replace(/\\.0$/, "")}h`;
-    dom.weeklyUnits.textContent = fmt.format(weeklyStats.totalUnits);
+    dom.weeklyUnits.textContent = formatValue(weeklyStats.totalUnits);
+    dom.weeklyUnitsLabel.textContent = unitLabel;
 }
 
 function renderScenarios() {
@@ -319,7 +377,7 @@ function renderScenarios() {
 
 function openLogModal() {
     dom.modalSession.classList.remove("hidden");
-    dom.inputSessionHours.value = (currentGoal.minutesPerSession / 60).toFixed(2).replace(/\\.00$/, "");
+    dom.inputSessionHours.value = (currentGoal.plan.minutesPerSession / 60).toFixed(2).replace(/\\.00$/, "");
     dom.inputSessionWords.value = "";
     dom.inputSessionHours.focus();
 }
@@ -341,12 +399,10 @@ function saveSession() {
     let value = null;
     let isEstimated = false;
 
-    if (currentGoal.mode === "time") {
-        value = minutes;
-    } else if (wordsInput && !isNaN(parseInt(wordsInput, 10))) {
+    if (currentGoal.mode === "units" && wordsInput && !isNaN(parseInt(wordsInput, 10))) {
         value = parseInt(wordsInput, 10);
-    } else if (currentGoal.rate > 0) {
-        value = Math.floor(hours * currentGoal.rate);
+    } else if (currentGoal.mode === "units" && currentGoal.rate.valuePerHour > 0) {
+        value = Math.floor(hours * currentGoal.rate.valuePerHour);
         isEstimated = true;
     } else {
         value = null;
@@ -371,15 +427,15 @@ function saveSession() {
 
 function openWizard() {
     dom.modalProject.classList.remove("hidden");
-    dom.inputProjectName.value = currentGoal.name;
-    dom.inputProjectTarget.value = currentGoal.target;
-    dom.inputProjectHours.value = (currentGoal.minutesPerSession / 60).toFixed(2).replace(/\\.00$/, "");
-    dom.inputProjectWph.value = currentGoal.rate;
+    dom.inputProjectName.value = currentGoal.title;
+    dom.inputProjectTarget.value = currentGoal.targetValue;
+    dom.inputProjectHours.value = (currentGoal.plan.minutesPerSession / 60).toFixed(2).replace(/\\.00$/, "");
+    dom.inputProjectWph.value = currentGoal.rate.valuePerHour;
 
     const checkboxes = document.querySelectorAll(".day-checkbox");
     checkboxes.forEach((chk) => {
         const dayValue = parseInt(chk.value, 10);
-        chk.checked = currentGoal.scheduleDays.includes(dayValue);
+        chk.checked = currentGoal.plan.daysPerWeek.includes(dayValue);
     });
 }
 
@@ -418,17 +474,21 @@ function saveGoalConfiguration() {
 
     const minutesPerSession = !isNaN(hours) && hours > 0 ? Math.round(hours * 60) : 60;
     const rate = currentGoal.mode === "time"
-        ? currentGoal.rate
+        ? currentGoal.rate.valuePerHour
         : (!isNaN(rateInput) && rateInput > 0 ? rateInput : 10);
 
-    currentGoal = {
+    currentGoal = normalizeGoal({
         ...currentGoal,
-        name,
-        target,
-        scheduleDays: selectedDays,
-        minutesPerSession,
-        rate
-    };
+        title: name,
+        targetValue: target,
+        plan: {
+            daysPerWeek: selectedDays,
+            minutesPerSession
+        },
+        rate: {
+            valuePerHour: rate
+        }
+    });
 
     saveData();
     renderDashboard();

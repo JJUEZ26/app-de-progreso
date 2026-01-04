@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Writer's Dashboard - Progreso de Escritura</title>
+    <title>Goal Tracker - Progreso de metas</title>
     <link rel="stylesheet" href="styles.css">
     <!-- Fuente Nunito para el look "Friendly" -->
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -12,7 +12,7 @@
 
     <header class="app-header">
         <div class="container">
-            <h1>Progreso de Escritura</h1>
+            <h1>Goal Tracker</h1>
         </div>
     </header>
 
@@ -33,7 +33,7 @@
                     
                     <div class="progress-container">
                         <div class="progress-labels">
-                            <span id="words-progress">0 / 0 palabras</span>
+                            <span id="words-progress">0 / 0 unidades</span>
                             <span id="percent-progress" class="percent">0%</span>
                         </div>
                         <div class="progress-bar-track">
@@ -67,7 +67,7 @@
                     <div class="stat-item">
                         <span class="stat-label">Producción</span>
                         <strong id="weekly-units" class="stat-value">--</strong>
-                        <span class="stat-sub">Palabras</span>
+                        <span id="weekly-units-label" class="stat-sub">Unidades</span>
                     </div>
                 </div>
             </section>
@@ -132,7 +132,7 @@
                     <div id="setting-hours" class="setting-value">--</div>
                 </div>
                 <div class="setting-item">
-                    <label>Palabras por hora (Est.)</label>
+                    <label>Unidades por hora (Est.)</label>
                     <div id="setting-wph" class="setting-value">--</div>
                 </div>
             </div>
@@ -141,7 +141,7 @@
     </main>
 
     <footer class="app-footer">
-        <p>&copy; 2023 Writer's Dashboard MVP</p>
+        <p>&copy; 2023 Goal Tracker MVP</p>
     </footer>
 
     <!-- MODAL REGISTRAR SESIÓN -->
@@ -159,7 +159,7 @@
                 </div>
 
                 <div class="form-field">
-                    <label for="input-words">Palabras escritas</label>
+                    <label for="input-words">Avance (opcional)</label>
                     <input id="input-words" type="number" min="0" class="input-field" placeholder="Opcional">
                     <small class="hint">Si lo dejas vacío, lo calculamos por ti.</small>
                 </div>
@@ -188,7 +188,7 @@
                 </div>
     
                 <div class="form-field">
-                    <label for="input-project-target">Meta de palabras</label>
+                    <label for="input-project-target">Meta de unidades</label>
                     <input id="input-project-target" type="number" class="input-field" placeholder="Ej: 50000" min="1" />
                 </div>
     
@@ -228,7 +228,7 @@
                     </div>
     
                     <div class="form-field">
-                        <label for="input-project-wph">Palabras por hora (est.)</label>
+                        <label for="input-project-wph">Unidades por hora (est.)</label>
                         <input id="input-project-wph" type="number" min="1" class="input-field" />
                     </div>
                 </div>
