@@ -37,6 +37,25 @@ const DEFAULT_GOAL = {
 let currentGoal = normalizeGoal(DEFAULT_GOAL);
 let sessions = [];
 
+const DEFAULT_WIZARD_STATE = {
+    intentText: "",
+    title: "",
+    category: "auto",
+    mode: "units",
+    unitName: "unidades",
+    targetValue: 0,
+    daysPerWeek: [1, 2, 3, 4, 5],
+    minutesPerSession: 60,
+    rateValuePerHour: 20
+};
+
+let wizardState = { ...DEFAULT_WIZARD_STATE };
+let wizardStep = 1;
+const wizardMeta = {
+    titleEdited: false,
+    unitNameEdited: false
+};
+
 // --- 2. REFERENCIAS AL DOM ---
 
 const dom = {
@@ -70,11 +89,23 @@ const dom = {
     modalProject: document.getElementById("modal-project"),
     btnCloseProjectModal: document.getElementById("btn-close-project-modal"),
     btnCancelProject: document.getElementById("btn-cancel-project"),
-    btnSaveProject: document.getElementById("btn-save-project"),
-    inputProjectName: document.getElementById("input-project-name"),
-    inputProjectTarget: document.getElementById("input-project-target"),
-    inputProjectHours: document.getElementById("input-project-hours"),
-    inputProjectWph: document.getElementById("input-project-wph")
+    btnWizardBack: document.getElementById("btn-wizard-back"),
+    btnWizardNext: document.getElementById("btn-wizard-next"),
+    btnWizardFinish: document.getElementById("btn-wizard-finish"),
+    wizardStepLabel: document.getElementById("wizard-step-label"),
+    wizardDots: document.getElementById("wizard-dots"),
+    wizardSteps: document.getElementById("wizard-steps"),
+    wizardIntent: document.getElementById("wizard-intent"),
+    wizardTitle: document.getElementById("wizard-title"),
+    wizardTarget: document.getElementById("wizard-target"),
+    wizardTargetLabel: document.getElementById("wizard-target-label"),
+    wizardUnitField: document.getElementById("wizard-unit-field"),
+    wizardUnitName: document.getElementById("wizard-unit-name"),
+    wizardMinutes: document.getElementById("wizard-minutes"),
+    wizardRate: document.getElementById("wizard-rate"),
+    wizardSummaryTarget: document.getElementById("wizard-summary-target"),
+    wizardSummaryPlan: document.getElementById("wizard-summary-plan"),
+    wizardSummaryEta: document.getElementById("wizard-summary-eta")
 };
 
 // --- 3. DATOS Y MIGRACIONES ---
@@ -210,14 +241,14 @@ function saveData() {
 
 // --- 4. LÓGICA DE NEGOCIO (Cálculos) ---
 
-function getStats() {
+function getStats(goal = currentGoal) {
     let totalUnits = 0;
     let totalMinutes = 0;
 
     sessions.forEach((session) => {
         totalMinutes += session.minutes;
 
-        if (currentGoal.mode === "time") {
+        if (goal.mode === "time") {
             totalUnits += session.minutes / 60;
             return;
         }
@@ -227,19 +258,19 @@ function getStats() {
             return;
         }
 
-        const rate = currentGoal.rate.valuePerHour;
+        const rate = goal.rate.valuePerHour;
         if (rate > 0 && session.minutes > 0) {
             totalUnits += Math.floor((session.minutes / 60) * rate);
         }
     });
 
-    const percent = currentGoal.targetValue > 0
-        ? Math.min(100, Math.floor((totalUnits / currentGoal.targetValue) * 100))
+    const percent = goal.targetValue > 0
+        ? Math.min(100, Math.floor((totalUnits / goal.targetValue) * 100))
         : 0;
 
-    const averageRate = currentGoal.mode === "units" && totalMinutes > 0
+    const averageRate = goal.mode !== "time" && totalMinutes > 0
         ? Math.floor(totalUnits / (totalMinutes / 60))
-        : currentGoal.rate.valuePerHour;
+        : goal.rate.valuePerHour;
 
     return { totalUnits, totalMinutes, percent, averageRate };
 }
@@ -280,18 +311,18 @@ function getWeeklyStats() {
     };
 }
 
-function calculateETA(paceModifier = 1) {
-    const stats = getStats();
-    const remainingUnits = currentGoal.targetValue - stats.totalUnits;
+function calculateETA(paceModifier = 1, goal = currentGoal) {
+    const stats = getStats(goal);
+    const remainingUnits = goal.targetValue - stats.totalUnits;
 
     if (remainingUnits <= 0) {
         return "¡Completado!";
     }
 
-    const sessionsPerWeek = currentGoal.plan.daysPerWeek.length;
-    const minutesPerSession = currentGoal.plan.minutesPerSession;
+    const sessionsPerWeek = goal.plan.daysPerWeek.length;
+    const minutesPerSession = goal.plan.minutesPerSession;
 
-    if (currentGoal.mode === "time") {
+    if (goal.mode === "time") {
         const minutesPerWeek = minutesPerSession * sessionsPerWeek * paceModifier;
         if (minutesPerWeek <= 0) {
             return "Configura tu ritmo";
@@ -300,7 +331,7 @@ function calculateETA(paceModifier = 1) {
         return formatFutureDate(Math.ceil(weeksNeeded * 7));
     }
 
-    const rateToUse = stats.averageRate > 0 ? stats.averageRate : currentGoal.rate.valuePerHour;
+    const rateToUse = stats.averageRate > 0 ? stats.averageRate : goal.rate.valuePerHour;
     const unitsPerSession = (rateToUse * (minutesPerSession / 60)) * paceModifier;
 
     if (unitsPerSession <= 0 || sessionsPerWeek <= 0) {
@@ -343,7 +374,7 @@ function renderDashboard() {
     dom.settingDays.textContent = `${currentGoal.plan.daysPerWeek.length} días/sem`;
     dom.settingHours.textContent = `${(currentGoal.plan.minutesPerSession / 60).toFixed(2).replace(/\\.00$/, "")}h/sesión`;
 
-    if (currentGoal.mode === "units") {
+    if (currentGoal.mode !== "time") {
         const speedLabel = stats.totalMinutes > 0 ? "Real" : "Est.";
         const speedValue = stats.totalMinutes > 0 ? stats.averageRate : currentGoal.rate.valuePerHour;
         dom.settingWph.textContent = `${fmt.format(speedValue)} ${unitLabel}/h (${speedLabel})`;
@@ -399,9 +430,9 @@ function saveSession() {
     let value = null;
     let isEstimated = false;
 
-    if (currentGoal.mode === "units" && wordsInput && !isNaN(parseInt(wordsInput, 10))) {
+    if (currentGoal.mode !== "time" && wordsInput && !isNaN(parseInt(wordsInput, 10))) {
         value = parseInt(wordsInput, 10);
-    } else if (currentGoal.mode === "units" && currentGoal.rate.valuePerHour > 0) {
+    } else if (currentGoal.mode !== "time" && currentGoal.rate.valuePerHour > 0) {
         value = Math.floor(hours * currentGoal.rate.valuePerHour);
         isEstimated = true;
     } else {
@@ -425,68 +456,258 @@ function saveSession() {
 
 // --- 7. MODAL: CONFIGURAR PROYECTO (WIZARD) ---
 
-function openWizard() {
-    dom.modalProject.classList.remove("hidden");
-    dom.inputProjectName.value = currentGoal.title;
-    dom.inputProjectTarget.value = currentGoal.targetValue;
-    dom.inputProjectHours.value = (currentGoal.plan.minutesPerSession / 60).toFixed(2).replace(/\\.00$/, "");
-    dom.inputProjectWph.value = currentGoal.rate.valuePerHour;
+function suggestFromIntent(intentText) {
+    const normalized = intentText.toLowerCase();
+    if (normalized.includes("leer") || normalized.includes("libro")) {
+        return {
+            unitName: "páginas",
+            title: intentText ? `Leer: ${intentText}` : ""
+        };
+    }
 
-    const checkboxes = document.querySelectorAll(".day-checkbox");
-    checkboxes.forEach((chk) => {
-        const dayValue = parseInt(chk.value, 10);
-        chk.checked = currentGoal.plan.daysPerWeek.includes(dayValue);
+    if (normalized.includes("canción") || normalized.includes("guitarra") || normalized.includes("piano")) {
+        return {
+            unitName: "minutos",
+            title: ""
+        };
+    }
+
+    return {
+        unitName: "unidades",
+        title: ""
+    };
+}
+
+function buildWizardStateFromGoal(goal) {
+    return {
+        ...DEFAULT_WIZARD_STATE,
+        intentText: goal.title || "",
+        title: goal.title || "",
+        mode: goal.mode || DEFAULT_WIZARD_STATE.mode,
+        unitName: goal.unitName || DEFAULT_WIZARD_STATE.unitName,
+        targetValue: Number(goal.targetValue) || DEFAULT_WIZARD_STATE.targetValue,
+        daysPerWeek: Array.isArray(goal.plan?.daysPerWeek)
+            ? [...goal.plan.daysPerWeek]
+            : [...DEFAULT_WIZARD_STATE.daysPerWeek],
+        minutesPerSession: Number(goal.plan?.minutesPerSession) || DEFAULT_WIZARD_STATE.minutesPerSession,
+        rateValuePerHour: Number(goal.rate?.valuePerHour) || DEFAULT_WIZARD_STATE.rateValuePerHour
+    };
+}
+
+function isDefaultGoal(goal) {
+    const baseline = normalizeGoal(DEFAULT_GOAL);
+    return goal.id === baseline.id
+        && goal.title === baseline.title
+        && goal.targetValue === baseline.targetValue
+        && goal.mode === baseline.mode
+        && goal.unitName === baseline.unitName
+        && goal.plan.minutesPerSession === baseline.plan.minutesPerSession
+        && JSON.stringify(goal.plan.daysPerWeek) === JSON.stringify(baseline.plan.daysPerWeek);
+}
+
+function getActiveWizardSteps() {
+    return wizardState.mode === "time" ? [1, 2, 3, 4, 6] : [1, 2, 3, 4, 5, 6];
+}
+
+function getWizardStepIndex(step) {
+    return getActiveWizardSteps().indexOf(step);
+}
+
+function formatWizardValue(value) {
+    const fmt = new Intl.NumberFormat("es-ES");
+    if (wizardState.mode === "time") {
+        return fmt.format(Number(value.toFixed(1)));
+    }
+    return fmt.format(Math.floor(value));
+}
+
+function updateWizardProgress() {
+    const steps = getActiveWizardSteps();
+    const activeIndex = getWizardStepIndex(wizardStep);
+    const totalSteps = steps.length;
+    const displayIndex = activeIndex >= 0 ? activeIndex + 1 : 1;
+
+    dom.wizardStepLabel.textContent = `Paso ${displayIndex}/${totalSteps}`;
+    dom.wizardDots.innerHTML = "";
+    steps.forEach((step) => {
+        const dot = document.createElement("span");
+        dot.className = `wizard-dot${step === wizardStep ? " active" : ""}`;
+        dom.wizardDots.appendChild(dot);
     });
 }
 
-function toggleWizardMode(mode) {
-    currentGoal.mode = mode || currentGoal.mode || "units";
+function updateWizardStepVisibility() {
+    const stepNodes = dom.wizardSteps.querySelectorAll(".wizard-step");
+    stepNodes.forEach((node) => {
+        const step = Number(node.dataset.step);
+        node.classList.toggle("active", step === wizardStep);
+    });
+}
+
+function updateWizardModeUI() {
+    const modeButtons = dom.wizardSteps.querySelectorAll(".mode-card");
+    modeButtons.forEach((btn) => {
+        const mode = btn.dataset.mode;
+        btn.classList.toggle("active", mode === wizardState.mode);
+    });
+
+    const isTime = wizardState.mode === "time";
+    dom.wizardUnitField.style.display = isTime ? "none" : "flex";
+    dom.wizardTargetLabel.textContent = isTime
+        ? "¿Cuántas horas en total?"
+        : "¿Meta total?";
+}
+
+function updateWizardDaysUI() {
+    const checkboxes = dom.wizardSteps.querySelectorAll(".day-checkbox");
+    checkboxes.forEach((chk) => {
+        const dayValue = parseInt(chk.value, 10);
+        chk.checked = wizardState.daysPerWeek.includes(dayValue);
+    });
+}
+
+function updateWizardSummary() {
+    const previewGoal = normalizeGoal({
+        ...currentGoal,
+        title: wizardState.title || wizardState.intentText || DEFAULT_GOAL.title,
+        mode: wizardState.mode,
+        unitName: wizardState.mode === "time" ? "horas" : wizardState.unitName || "unidades",
+        targetValue: wizardState.targetValue || 0,
+        plan: {
+            daysPerWeek: wizardState.daysPerWeek,
+            minutesPerSession: wizardState.minutesPerSession
+        },
+        rate: {
+            valuePerHour: wizardState.rateValuePerHour
+        }
+    });
+
+    const targetLabel = `${formatWizardValue(previewGoal.targetValue)} ${previewGoal.unitName}`;
+    const planLabel = `${previewGoal.plan.daysPerWeek.length} días · ${previewGoal.plan.minutesPerSession} min/sesión`;
+    const etaLabel = calculateETA(1, previewGoal);
+
+    dom.wizardSummaryTarget.textContent = targetLabel;
+    dom.wizardSummaryPlan.textContent = planLabel;
+    dom.wizardSummaryEta.textContent = etaLabel;
+    dom.wizardTitle.value = wizardState.title || wizardState.intentText || "";
+}
+
+function isWizardStepValid(step) {
+    switch (step) {
+        case 1:
+            return Boolean(wizardState.intentText.trim());
+        case 2:
+            return Boolean(wizardState.mode);
+        case 3:
+            if (wizardState.mode === "time") {
+                return wizardState.targetValue > 0;
+            }
+            return wizardState.targetValue > 0 && Boolean(wizardState.unitName.trim());
+        case 4:
+            return wizardState.daysPerWeek.length > 0 && wizardState.minutesPerSession > 0;
+        case 5:
+            if (wizardState.mode === "time") {
+                return true;
+            }
+            return wizardState.rateValuePerHour > 0;
+        case 6:
+        default:
+            return true;
+    }
+}
+
+function updateWizardButtons() {
+    const steps = getActiveWizardSteps();
+    const activeIndex = getWizardStepIndex(wizardStep);
+    const isLast = activeIndex === steps.length - 1;
+
+    dom.btnWizardBack.style.display = activeIndex > 0 ? "inline-flex" : "none";
+    dom.btnWizardNext.style.display = isLast ? "none" : "inline-flex";
+    dom.btnWizardFinish.style.display = isLast ? "inline-flex" : "none";
+
+    dom.btnWizardNext.disabled = !isWizardStepValid(wizardStep);
+    dom.btnWizardFinish.disabled = !isWizardStepValid(wizardStep);
+}
+
+function setWizardStep(nextStep) {
+    const steps = getActiveWizardSteps();
+    const clampedStep = steps.includes(nextStep) ? nextStep : steps[0];
+    wizardStep = clampedStep;
+    updateWizardProgress();
+    updateWizardStepVisibility();
+    updateWizardButtons();
+    updateWizardSummary();
+}
+
+function moveWizardStep(direction) {
+    const steps = getActiveWizardSteps();
+    const currentIndex = getWizardStepIndex(wizardStep);
+    const nextIndex = currentIndex + direction;
+    if (nextIndex >= 0 && nextIndex < steps.length) {
+        setWizardStep(steps[nextIndex]);
+    }
+}
+
+function applyIntentSuggestions() {
+    const suggestion = suggestFromIntent(wizardState.intentText);
+    if (!wizardMeta.unitNameEdited && wizardState.mode !== "time") {
+        wizardState.unitName = suggestion.unitName;
+        dom.wizardUnitName.value = wizardState.unitName;
+    }
+    if (!wizardMeta.titleEdited) {
+        wizardState.title = suggestion.title || wizardState.intentText;
+        dom.wizardTitle.value = wizardState.title;
+    }
+}
+
+function openWizard() {
+    dom.modalProject.classList.remove("hidden");
+    wizardState = buildWizardStateFromGoal(currentGoal);
+    if (isDefaultGoal(currentGoal)) {
+        wizardState.intentText = "";
+        wizardState.title = "";
+    }
+    wizardMeta.titleEdited = Boolean(wizardState.title && wizardState.title !== DEFAULT_GOAL.title);
+    wizardMeta.unitNameEdited = Boolean(wizardState.unitName && wizardState.unitName !== DEFAULT_WIZARD_STATE.unitName);
+    wizardStep = getActiveWizardSteps()[0];
+
+    dom.wizardIntent.value = wizardState.intentText;
+    dom.wizardTarget.value = wizardState.targetValue || "";
+    dom.wizardUnitName.value = wizardState.unitName;
+    dom.wizardMinutes.value = wizardState.minutesPerSession;
+    dom.wizardRate.value = wizardState.rateValuePerHour;
+    dom.wizardTitle.value = wizardState.title;
+    updateWizardModeUI();
+    updateWizardDaysUI();
+    updateWizardProgress();
+    updateWizardStepVisibility();
+    updateWizardButtons();
+    updateWizardSummary();
 }
 
 function closeWizard() {
     dom.modalProject.classList.add("hidden");
 }
 
-function saveGoalConfiguration() {
-    const name = dom.inputProjectName.value.trim();
-    const target = parseInt(dom.inputProjectTarget.value, 10);
-    const hours = parseFloat(dom.inputProjectHours.value);
-    const rateInput = parseInt(dom.inputProjectWph.value, 10);
-
-    const selectedDays = Array.from(document.querySelectorAll(".day-checkbox:checked")).map((chk) =>
-        parseInt(chk.value, 10)
-    );
-
-    if (!name) {
-        alert("El nombre es obligatorio");
-        return;
-    }
-
-    if (isNaN(target) || target <= 0) {
-        alert("Meta inválida");
-        return;
-    }
-
-    if (selectedDays.length === 0) {
-        alert("Selecciona al menos un día de escritura");
-        return;
-    }
-
-    const minutesPerSession = !isNaN(hours) && hours > 0 ? Math.round(hours * 60) : 60;
-    const rate = currentGoal.mode === "time"
+function saveWizardGoal() {
+    const goalTitle = wizardState.title || wizardState.intentText || DEFAULT_GOAL.title;
+    const finalUnitName = wizardState.mode === "time" ? "horas" : (wizardState.unitName || "unidades");
+    const finalRate = wizardState.mode === "time"
         ? currentGoal.rate.valuePerHour
-        : (!isNaN(rateInput) && rateInput > 0 ? rateInput : 10);
+        : wizardState.rateValuePerHour;
 
     currentGoal = normalizeGoal({
         ...currentGoal,
-        title: name,
-        targetValue: target,
+        title: goalTitle,
+        mode: wizardState.mode,
+        unitName: finalUnitName,
+        targetValue: wizardState.targetValue,
         plan: {
-            daysPerWeek: selectedDays,
-            minutesPerSession
+            daysPerWeek: wizardState.daysPerWeek,
+            minutesPerSession: wizardState.minutesPerSession
         },
         rate: {
-            valuePerHour: rate
+            valuePerHour: finalRate
         }
     });
 
@@ -512,12 +733,97 @@ function initApp() {
     dom.btnOpenWizard.addEventListener("click", openWizard);
     dom.btnCloseProjectModal.addEventListener("click", closeWizard);
     dom.btnCancelProject.addEventListener("click", closeWizard);
-    dom.btnSaveProject.addEventListener("click", saveGoalConfiguration);
+    dom.btnWizardBack.addEventListener("click", () => moveWizardStep(-1));
+    dom.btnWizardNext.addEventListener("click", () => {
+        if (isWizardStepValid(wizardStep)) {
+            moveWizardStep(1);
+        }
+    });
+    dom.btnWizardFinish.addEventListener("click", () => {
+        if (isWizardStepValid(wizardStep)) {
+            saveWizardGoal();
+        }
+    });
+
+    dom.wizardIntent.addEventListener("input", (event) => {
+        wizardState.intentText = event.target.value.trim();
+        applyIntentSuggestions();
+        updateWizardButtons();
+        updateWizardSummary();
+    });
+
+    dom.wizardTitle.addEventListener("input", (event) => {
+        wizardMeta.titleEdited = true;
+        wizardState.title = event.target.value.trim();
+        updateWizardButtons();
+        updateWizardSummary();
+    });
+
+    dom.wizardTarget.addEventListener("input", (event) => {
+        const value = Number(event.target.value);
+        wizardState.targetValue = Number.isFinite(value) ? value : 0;
+        updateWizardButtons();
+        updateWizardSummary();
+    });
+
+    dom.wizardUnitName.addEventListener("input", (event) => {
+        wizardMeta.unitNameEdited = true;
+        wizardState.unitName = event.target.value.trim();
+        updateWizardButtons();
+        updateWizardSummary();
+    });
+
+    dom.wizardMinutes.addEventListener("input", (event) => {
+        const value = Number(event.target.value);
+        wizardState.minutesPerSession = Number.isFinite(value) ? value : 0;
+        updateWizardButtons();
+        updateWizardSummary();
+    });
+
+    dom.wizardRate.addEventListener("input", (event) => {
+        const value = Number(event.target.value);
+        wizardState.rateValuePerHour = Number.isFinite(value) ? value : 0;
+        updateWizardButtons();
+        updateWizardSummary();
+    });
+
+    dom.wizardSteps.querySelectorAll(".mode-card").forEach((button) => {
+        button.addEventListener("click", () => {
+            wizardState.mode = button.dataset.mode;
+            if (wizardState.mode === "time") {
+                wizardState.unitName = "horas";
+            } else if (!wizardMeta.unitNameEdited) {
+                wizardState.unitName = suggestFromIntent(wizardState.intentText).unitName;
+            }
+            updateWizardModeUI();
+            const steps = getActiveWizardSteps();
+            if (!steps.includes(wizardStep)) {
+                wizardStep = steps[steps.length - 1];
+            }
+            setWizardStep(wizardStep);
+        });
+    });
+
+    dom.wizardSteps.querySelectorAll(".day-checkbox").forEach((checkbox) => {
+        checkbox.addEventListener("change", () => {
+            wizardState.daysPerWeek = Array.from(dom.wizardSteps.querySelectorAll(".day-checkbox:checked")).map(
+                (chk) => parseInt(chk.value, 10)
+            );
+            updateWizardButtons();
+            updateWizardSummary();
+        });
+    });
 
     dom.btnExplore.addEventListener("click", () => {
         const section = document.getElementById("scenarios-section");
         if (section) section.scrollIntoView({ behavior: "smooth" });
     });
+
+    if (isDefaultGoal(currentGoal) && sessions.length === 0) {
+        setTimeout(() => {
+            openWizard();
+        }, 500);
+    }
 
     window.addEventListener("click", (event) => {
         if (event.target === dom.modalSession) closeLogModal();
