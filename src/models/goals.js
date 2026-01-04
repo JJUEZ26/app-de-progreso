@@ -34,8 +34,12 @@ export function normalizeGoal(rawGoal = {}) {
     const targetValue = Number.isFinite(rawTargetValue) ? rawTargetValue : DEFAULT_GOAL.targetValue;
     const rawUnitName = rawGoal.unitName || (mode === "time" ? "horas" : DEFAULT_GOAL.unitName);
     const unitName = rawUnitName === "unidades" ? "sesiones" : rawUnitName;
-    const planDays = Array.isArray(rawGoal.plan?.daysPerWeek)\n        ? rawGoal.plan.daysPerWeek\n        : (Array.isArray(rawGoal.scheduleDays) ? rawGoal.scheduleDays : DEFAULT_GOAL.plan.daysPerWeek);
-    const rawPlanMinutes = Number(\n        rawGoal.plan?.minutesPerSession ?? rawGoal.minutesPerSession ?? DEFAULT_GOAL.plan.minutesPerSession\n    );
+    const planDays = Array.isArray(rawGoal.plan?.daysPerWeek)
+        ? rawGoal.plan.daysPerWeek
+        : (Array.isArray(rawGoal.scheduleDays) ? rawGoal.scheduleDays : DEFAULT_GOAL.plan.daysPerWeek);
+    const rawPlanMinutes = Number(
+        rawGoal.plan?.minutesPerSession ?? rawGoal.minutesPerSession ?? DEFAULT_GOAL.plan.minutesPerSession
+    );
     const planMinutes = Number.isFinite(rawPlanMinutes) ? rawPlanMinutes : DEFAULT_GOAL.plan.minutesPerSession;
     const rawRateValue = Number(rawGoal.rate?.valuePerHour ?? rawGoal.rate ?? DEFAULT_GOAL.rate.valuePerHour);
     const rateValuePerHour = Number.isFinite(rawRateValue) ? rawRateValue : DEFAULT_GOAL.rate.valuePerHour;
