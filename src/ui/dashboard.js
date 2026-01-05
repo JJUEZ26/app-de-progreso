@@ -3,9 +3,10 @@ import {
     loadCurrentGoalId,
     loadGoals,
     loadSessionsByGoal,
+    saveGoals,
     saveCurrentGoalId
 } from "../core/storage.js";
-import { DEFAULT_GOAL, normalizeGoal } from "../models/goals.js";
+import { DEFAULT_GOAL, normalizeGoal, pauseGoal, resumeGoal } from "../models/goals.js";
 import { getStats, getWeeklyStats, calculateETA } from "../models/metrics.js";
 import { normalizeSessions } from "../models/sessions.js";
 import { today } from "../utils/dates.js";
@@ -108,4 +109,25 @@ export function renderDashboard() {
     } else {
         renderTodayView(dom.dashboardTodayPanel, goals, sessionsByGoalId, todayDate);
     }
+}
+
+export function handlePauseGoal(goalId) {
+    const goals = loadGoals();
+    const goal = goals.find((item) => item.id === goalId);
+    if (!goal) return;
+
+    const untilDate = window.prompt("¿Hasta qué fecha quieres pausar? (YYYY-MM-DD)", "")?.trim() || null;
+    pauseGoal(goal, { sinceDate: today(), untilDate: untilDate || null });
+    saveGoals(goals);
+    renderDashboard();
+}
+
+export function handleResumeGoal(goalId) {
+    const goals = loadGoals();
+    const goal = goals.find((item) => item.id === goalId);
+    if (!goal) return;
+
+    resumeGoal(goal);
+    saveGoals(goals);
+    renderDashboard();
 }

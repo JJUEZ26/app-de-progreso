@@ -228,6 +228,12 @@ body { background-color: var(--bg-color); color: var(--text-main); line-height: 
   color: #166534;
 }
 
+.status-paused {
+  border-color: #cbd5e1;
+  background: #e5e7eb;
+  color: #475569;
+}
+
 .goal-status.status-ontrack {
   background: #ecfdf3;
   color: #166534;
@@ -241,6 +247,11 @@ body { background-color: var(--bg-color); color: var(--text-main); line-height: 
 .goal-status.status-behind {
   background: #fee2e2;
   color: #991b1b;
+}
+
+.goal-status.status-paused {
+  background: #e5e7eb;
+  color: #475569;
 }
 
 .status-ontrack.goal-card,
@@ -259,6 +270,40 @@ body { background-color: var(--bg-color); color: var(--text-main); line-height: 
 .status-behind.today-item {
   border-color: #f97373;
   background: #fee2e2;
+}
+
+.status-paused.goal-card,
+.status-paused.today-item {
+  border-color: #cbd5e1;
+  background: #e5e7eb;
+}
+
+.goal-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.streak-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.paused-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: #e5e7eb;
+  color: #475569;
 }
 
 .goal-eta {
@@ -322,6 +367,12 @@ body { background-color: var(--bg-color); color: var(--text-main); line-height: 
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
+}
+
+.today-streak {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #92400e;
 }
 
 .today-actions .btn {
