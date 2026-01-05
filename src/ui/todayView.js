@@ -1,8 +1,10 @@
 import { appState } from "../core/state.js";
 import { getGoalProgress, getGoalStatus } from "../models/goals.js";
+import { computeStreak } from "../models/metrics.js";
 import { addSessionForToday, getSessionsForDate, getSessionsForGoal } from "../models/sessions.js";
 import { clearEl, createEl } from "../utils/dom.js";
-import { renderDashboard } from "./dashboard.js";
+import { formatShortDate } from "../utils/dates.js";
+import { handlePauseGoal, handleResumeGoal, renderDashboard } from "./dashboard.js";
 
 const DAY_LETTER_MAP = {
     L: 1,
@@ -56,9 +58,14 @@ export function buildTodayItems(goals, sessionsByGoal, todayDate) {
         const isWorkDay = isTodayWorkDay(goal, todayDate);
         const plannedMinutes = isWorkDay ? (goal.plan?.minutesPerSession || 0) : 0;
         const remainingMinutes = Math.max(plannedMinutes - completedMinutes, 0);
+        const streak = computeStreak(goal, sessionsForGoal, todayDate);
 
         let suggestionText = "Hoy es día libre para esta meta.";
-        if (!isWorkDay) {
+        if (goal.paused) {
+            suggestionText = goal.pauseUntil
+                ? `En pausa hasta ${formatShortDate(goal.pauseUntil)}`
+                : "Meta en pausa";
+        } else if (!isWorkDay) {
             suggestionText = "Hoy es día libre para esta meta.";
         } else if (remainingMinutes > 0) {
             suggestionText = `Te faltan ~${remainingMinutes} min para cumplir lo de hoy.`;
@@ -78,7 +85,11 @@ export function buildTodayItems(goals, sessionsByGoal, todayDate) {
             completedMinutes,
             remainingMinutes,
             suggestionText,
-            status
+            status,
+            currentStreak: streak.currentStreak,
+            longestStreak: streak.longestStreak,
+            paused: goal.paused,
+            pauseUntil: goal.pauseUntil
         };
     });
 }
@@ -125,7 +136,7 @@ export function renderTodayView(containerEl, goals, sessionsByGoal, todayDate) {
         const status = createEl("div", { className: `goal-status ${item.status.colorClass}`.trim(), text: item.suggestionText });
 
         const actions = createEl("div", { className: "today-actions" });
-        if (item.isTodayWorkDay && item.remainingMinutes > 0) {
+        if (!item.paused && item.isTodayWorkDay && item.remainingMinutes > 0) {
             const add15 = createEl("button", {
                 className: "btn btn-secondary",
                 text: "+15 min",
@@ -149,7 +160,30 @@ export function renderTodayView(containerEl, goals, sessionsByGoal, todayDate) {
             });
         }
 
-        card.append(headerRow, status, actions);
+        const streakLine = (!item.paused && item.currentStreak > 0)
+            ? createEl("div", { className: "today-streak", text: `Racha actual: ${item.currentStreak} días` })
+            : null;
+
+        const pauseButton = createEl("button", {
+            className: "btn btn-secondary btn-sm",
+            text: item.paused ? "Reanudar meta" : "Pausar meta",
+            attrs: { type: "button" }
+        });
+        pauseButton.addEventListener("click", (event) => {
+            event.stopPropagation();
+            if (item.paused) {
+                handleResumeGoal(item.goalId);
+            } else {
+                handlePauseGoal(item.goalId);
+            }
+        });
+        actions.appendChild(pauseButton);
+
+        card.append(headerRow, status);
+        if (streakLine) {
+            card.appendChild(streakLine);
+        }
+        card.appendChild(actions);
         list.appendChild(card);
     });
 

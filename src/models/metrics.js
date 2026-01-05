@@ -136,3 +136,89 @@ export function formatFutureDate(daysToAdd) {
     targetDate.setDate(now.getDate() + daysToAdd);
     return targetDate.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
 }
+
+const DAY_LETTER_MAP = {
+    L: 1,
+    M: 2,
+    X: 3,
+    J: 4,
+    V: 5,
+    S: 6,
+    D: 0
+};
+
+function toDateString(date) {
+    if (!date) return "";
+    if (typeof date === "string") return date;
+    return date.toISOString().split("T")[0];
+}
+
+function addDays(dateString, offset) {
+    const date = new Date(`${dateString}T00:00:00`);
+    date.setDate(date.getDate() + offset);
+    return date.toISOString().split("T")[0];
+}
+
+function isRelevantDay(goal, dateString) {
+    const planDays = goal.plan?.daysPerWeek;
+    if (!Array.isArray(planDays) || planDays.length === 0) {
+        return true;
+    }
+
+    const date = new Date(`${dateString}T00:00:00`);
+    const dayIndex = date.getDay();
+
+    return planDays.some((day) => {
+        if (typeof day === "number") {
+            const normalized = day === 7 ? 0 : day;
+            return normalized === dayIndex;
+        }
+        if (typeof day === "string") {
+            const key = day.trim().toUpperCase();
+            return DAY_LETTER_MAP[key] === dayIndex;
+        }
+        return false;
+    });
+}
+
+function isPausedDay(goal, dateString) {
+    if (!goal.paused || !goal.pauseSince) return false;
+    const date = new Date(`${dateString}T00:00:00`);
+    const pauseStart = new Date(`${goal.pauseSince}T00:00:00`);
+    if (date < pauseStart) return false;
+    if (goal.pauseUntil) {
+        const pauseEnd = new Date(`${goal.pauseUntil}T00:00:00`);
+        if (date > pauseEnd) return false;
+    }
+    return true;
+}
+
+export function computeStreak(goal, sessionsForGoal = [], todayDate = new Date().toISOString().split("T")[0]) {
+    const limitDays = 60;
+    const todayString = toDateString(todayDate);
+    const sessionDates = new Set(sessionsForGoal.map((session) => session.date));
+
+    let currentStreak = 0;
+
+    for (let offset = 0; offset < limitDays; offset += 1) {
+        const dateString = addDays(todayString, -offset);
+
+        if (isPausedDay(goal, dateString)) {
+            continue;
+        }
+
+        if (!isRelevantDay(goal, dateString)) {
+            continue;
+        }
+
+        if (sessionDates.has(dateString)) {
+            currentStreak += 1;
+        } else {
+            break;
+        }
+    }
+
+    const longestStreak = Math.max(Number(goal.longestStreak || 0), currentStreak);
+
+    return { currentStreak, longestStreak };
+}

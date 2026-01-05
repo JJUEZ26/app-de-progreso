@@ -18,6 +18,11 @@ export const DEFAULT_GOAL = {
     },
     scheduleDays: [1, 2, 3, 4, 5],
     minutesPerSession: 60,
+    paused: false,
+    pauseSince: null,
+    pauseUntil: null,
+    pauseReason: null,
+    longestStreak: 0,
     rate: {
         valuePerHour: 500
     }
@@ -43,6 +48,12 @@ export function normalizeGoal(rawGoal = {}) {
     const planMinutes = Number.isFinite(rawPlanMinutes) ? rawPlanMinutes : DEFAULT_GOAL.plan.minutesPerSession;
     const rawRateValue = Number(rawGoal.rate?.valuePerHour ?? rawGoal.rate ?? DEFAULT_GOAL.rate.valuePerHour);
     const rateValuePerHour = Number.isFinite(rawRateValue) ? rawRateValue : DEFAULT_GOAL.rate.valuePerHour;
+    const paused = typeof rawGoal.paused === "boolean" ? rawGoal.paused : DEFAULT_GOAL.paused;
+    const pauseSince = rawGoal.pauseSince || null;
+    const pauseUntil = rawGoal.pauseUntil || null;
+    const pauseReason = rawGoal.pauseReason || null;
+    const rawLongestStreak = Number(rawGoal.longestStreak ?? DEFAULT_GOAL.longestStreak);
+    const longestStreak = Number.isFinite(rawLongestStreak) ? rawLongestStreak : DEFAULT_GOAL.longestStreak;
 
     return {
         ...DEFAULT_GOAL,
@@ -63,10 +74,34 @@ export function normalizeGoal(rawGoal = {}) {
         },
         scheduleDays: planDays,
         minutesPerSession: planMinutes,
+        paused,
+        pauseSince,
+        pauseUntil,
+        pauseReason,
+        longestStreak,
         rate: {
             valuePerHour: rateValuePerHour
         }
     };
+}
+
+export function pauseGoal(goal, { reason, sinceDate, untilDate } = {}) {
+    if (!goal) return goal;
+    goal.paused = true;
+    goal.pauseSince = sinceDate || goal.pauseSince || null;
+    goal.pauseUntil = untilDate || null;
+    if (reason) {
+        goal.pauseReason = reason;
+    }
+    return goal;
+}
+
+export function resumeGoal(goal) {
+    if (!goal) return goal;
+    goal.paused = false;
+    goal.pauseSince = null;
+    goal.pauseUntil = null;
+    return goal;
 }
 
 export function getGoalProgress(goal, sessionsForGoal = []) {
@@ -121,17 +156,32 @@ export function getGoalStatus(goal, progressInfo, todayDate) {
     const labels = {
         "on-track": "En ruta",
         "warning": "Necesita ajuste",
-        "behind": "Atrasada"
+        "behind": "Atrasada",
+        "paused": "Pausada"
     };
 
     const colors = {
         "on-track": "status-ontrack",
         "warning": "status-warning",
-        "behind": "status-behind"
+        "behind": "status-behind",
+        "paused": "status-paused"
     };
 
     let status = "on-track";
     let etaText = "A tu ritmo";
+
+    if (goal.paused) {
+        status = "paused";
+        etaText = goal.pauseUntil
+            ? `Pausa hasta ${formatShortDate(goal.pauseUntil)}`
+            : "En pausa";
+        return {
+            status,
+            label: labels[status],
+            colorClass: colors[status],
+            etaText
+        };
+    }
 
     if (goal.deadlineDate) {
         const totalDays = Math.max(1, diffInDays(goal.startDate || todayDate, goal.deadlineDate));

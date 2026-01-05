@@ -1,5 +1,6 @@
 import { appState } from "../core/state.js";
 import { getGoalProgress, getGoalStatus } from "../models/goals.js";
+import { computeStreak } from "../models/metrics.js";
 import { getSessionsForGoal } from "../models/sessions.js";
 import { clearEl, createEl } from "../utils/dom.js";
 import { renderDashboard } from "./dashboard.js";
@@ -31,6 +32,7 @@ export function renderVisionView(containerEl, goals, sessionsByGoal, todayDate) 
         const sessionsForGoal = getSessionsForGoal(sessionsByGoal, goal.id);
         const progressInfo = getGoalProgress(goal, sessionsForGoal);
         const status = getGoalStatus(goal, progressInfo, todayDate);
+        const streak = computeStreak(goal, sessionsForGoal, todayDate);
         const isSelected = appState.selectedGoalId === goal.id;
 
         const card = createEl("article", {
@@ -58,9 +60,20 @@ export function renderVisionView(containerEl, goals, sessionsByGoal, todayDate) 
             text: status.label
         });
 
+        const badges = createEl("div", { className: "goal-badges" });
+        if (goal.paused) {
+            badges.appendChild(
+                createEl("span", { className: `paused-badge ${status.colorClass}`.trim(), text: "⏸ En pausa" })
+            );
+        } else if (streak.currentStreak > 0) {
+            badges.appendChild(
+                createEl("span", { className: "streak-badge", text: `🔥 Racha: ${streak.currentStreak} días` })
+            );
+        }
+
         const eta = createEl("div", { className: "goal-eta", text: status.etaText });
 
-        card.append(header, statusEl, eta);
+        card.append(header, statusEl, badges, eta);
         card.addEventListener("click", () => {
             appState.selectedGoalId = goal.id;
             renderDashboard();
