@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MetaLogic - Planificación & Motivación</title>
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚀</text></svg>">
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+</head>
+
+<body class="light-theme">
+
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <h2>MetaLogic</h2>
+        </div>
+        <nav class="sidebar-nav">
+            <button class="nav-btn active" data-view="dashboard">
+                <span class="icon">📊</span> Dashboard
+            </button>
+            <button class="nav-btn" data-view="pet">
+                <span class="icon">🥚</span> Mascota
+            </button>
+            <button class="nav-btn" data-view="assistant">
+                <span class="icon">💬</span> Asistente IA
+            </button>
+            <button class="nav-btn" data-view="settings">
+                <span class="icon">⚙️</span> Ajustes
+            </button>
+        </nav>
+    </aside>
+
+    <main class="main-content">
+        <header class="top-bar">
+            <h1 id="view-title">Mi Dashboard</h1>
+            <div class="top-actions">
+                <button id="btn-new-goal" class="btn btn-primary">+ Nueva Meta</button>
+            </div>
+        </header>
+
+        <!-- DASHBOARD VIEW -->
+        <section id="view-dashboard" class="view">
+            <div class="stats-overview">
+                <div class="mini-card">
+                    <span class="label">Activas</span>
+                    <strong id="stat-active-count">0</strong>
+                </div>
+                <div class="mini-card">
+                    <span class="label">Racha Global</span>
+                    <strong id="stat-global-streak">0 días</strong>
+                </div>
+                <div class="mini-card">
+                    <span class="label">Completadas</span>
+                    <strong id="stat-completed-count">0</strong>
+                </div>
+            </div>
+
+            <div id="goals-grid" class="goals-grid">
+                <!-- Goal cards injectadas dinámicamente -->
+                <div class="empty-state">
+                    <p>No tienes metas activas. ¡Habla con el asistente para crear una!</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- PET VIEW -->
+        <section id="view-pet" class="view hidden">
+            <div class="pet-dashboard">
+                <div class="pet-visual-card card">
+                    <div id="pet-container" class="pet-container">
+                        <!-- SVG Pet injected here -->
+                    </div>
+                    <div class="pet-info">
+                        <h2 id="pet-name-display">MetaPet</h2>
+                        <p id="pet-stage-display">Nivel 1 - Bebé</p>
+                    </div>
+                </div>
+
+                <div class="pet-stats-card card">
+                    <h3>Estado</h3>
+                    <div class="stat-bar">
+                        <label>Salud</label>
+                        <div class="bar">
+                            <div id="pet-health-bar" class="fill health" style="width: 100%"></div>
+                        </div>
+                    </div>
+                    <div class="stat-bar">
+                        <label>Hambre</label>
+                        <div class="bar">
+                            <div id="pet-hunger-bar" class="fill hunger" style="width: 20%"></div>
+                        </div>
+                    </div>
+                    <div class="stat-bar">
+                        <label>Experiencia</label>
+                        <div class="bar">
+                            <div id="pet-exp-bar" class="fill exp" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <div class="pet-actions">
+                        <div class="inventory">
+                            <span class="icon">🍱</span>
+                            <span id="food-count">5</span> Galletas
+                        </div>
+                        <button id="btn-feed-pet" class="btn btn-primary btn-lg">Alimentar</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ASSISTANT VIEW -->
+        <section id="view-assistant" class="view hidden">
+            <div class="chat-container">
+                <div id="chat-messages" class="chat-messages">
+                    <div class="message assistant">
+                        ¡Hola! Soy tu asistente de metas. ¿Qué te gustaría lograr hoy?
+                        Puedes decirme algo como "Quiero leer 20 páginas al día" o "Ahorrar $500 en 3 meses".
+                    </div>
+                </div>
+                <div class="chat-input-area">
+                    <input type="text" id="chat-input" placeholder="Escribe tu meta o pregunta..." />
+                    <button id="btn-send-chat" class="btn btn-primary">Enviar</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- SETTINGS VIEW -->
+        <section id="view-settings" class="view hidden">
+            <div class="card">
+                <h3>Personalización</h3>
+                <div class="form-field">
+                    <label>Tema</label>
+                    <select id="select-theme" class="input-field">
+                        <option value="light">Claro</option>
+                        <option value="dark">Oscuro</option>
+                    </select>
+                </div>
+                <div class="notice">
+                    <p>IA conectada vía MetaLogic Secure Backend.</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- MODAL: NUEVA META -->
+    <div id="modal-goal" class="modal-backdrop hidden">
+        <div class="modal-card">
+            <header class="modal-header">
+                <h3 class="modal-title">Crear nueva meta</h3>
+                <button class="modal-close">&times;</button>
+            </header>
+            <div class="modal-body">
+                <div class="form-field">
+                    <label>Tipo de meta</label>
+                    <select id="goal-type-select" class="input-field">
+                        <option value="habit">Hábito recurrente</option>
+                        <option value="quantitative">Meta numérica (Ahorro, lectura...)</option>
+                        <option value="project">Proyecto con hitos</option>
+                    </select>
+                </div>
+                <!-- Campos dinámicos según el tipo se inyectarán aquí -->
+                <div id="dynamic-goal-fields"></div>
+            </div>
+            <footer class="modal-footer">
+                <button class="btn btn-secondary btn-cancel">Cancelar</button>
+                <button id="btn-save-goal" class="btn btn-primary">Crear Meta</button>
+            </footer>
+        </div>
+    </div>
+
+    <!-- Scripts using module type -->
+    <script type="module" src="js/main.js"></script>
+</body>
+
+</html>
