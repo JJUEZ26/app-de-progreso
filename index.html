@@ -1,412 +1,417 @@
-<<<<<<< HEAD
-<!DOCTYPE html>
-<html lang="es">
+<<<<<<< HEAD <!DOCTYPE html>
+    <html lang="es">
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MetaLogic - Planificación & Motivación</title>
-    <link rel="icon"
-        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚀</text></svg>">
-    <link rel="stylesheet" href="styles.css">
-    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
-</head>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>MetaLogic - Planificación & Motivación</title>
+        <link rel="icon"
+            href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚀</text></svg>">
+        <link rel="stylesheet" href="styles.css">
+        <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+    </head>
 
-<body class="light-theme">
+    <body class="light-theme">
 
-    <aside class="sidebar">
-        <div class="sidebar-header">
-            <h2>MetaLogic</h2>
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>MetaLogic</h2>
+            </div>
+            <nav class="sidebar-nav">
+                <button class="nav-btn active" data-view="dashboard">
+                    <span class="icon">📊</span> Dashboard
+                </button>
+                <button class="nav-btn" data-view="pet">
+                    <span class="icon">🥚</span> Mascota
+                </button>
+                <button class="nav-btn" data-view="assistant">
+                    <span class="icon">💬</span> Asistente IA
+                </button>
+                <button class="nav-btn" data-view="settings">
+                    <span class="icon">⚙️</span> Ajustes
+                </button>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <header class="top-bar">
+                <h1 id="view-title">Mi Dashboard</h1>
+                <div class="top-actions">
+                    <button id="btn-new-goal" class="btn btn-primary">+ Nueva Meta</button>
+                </div>
+            </header>
+
+            <!-- DASHBOARD VIEW -->
+            <section id="view-dashboard" class="view">
+                <div class="stats-overview">
+                    <div class="mini-card">
+                        <span class="label">Activas</span>
+                        <strong id="stat-active-count">0</strong>
+                    </div>
+                    <div class="mini-card">
+                        <span class="label">Racha Global</span>
+                        <strong id="stat-global-streak">0 días</strong>
+                    </div>
+                    <div class="mini-card">
+                        <span class="label">Completadas</span>
+                        <strong id="stat-completed-count">0</strong>
+                    </div>
+                </div>
+
+                <div id="goals-grid" class="goals-grid">
+                    <!-- Goal cards injectadas dinámicamente -->
+                    <div class="empty-state">
+                        <p>No tienes metas activas. ¡Habla con el asistente para crear una!</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- PET VIEW -->
+            <section id="view-pet" class="view hidden">
+                <div class="pet-dashboard">
+                    <div class="pet-visual-card card">
+                        <div id="pet-container" class="pet-container">
+                            <!-- SVG Pet injected here -->
+                        </div>
+                        <div class="pet-info">
+                            <h2 id="pet-name-display">MetaPet</h2>
+                            <p id="pet-stage-display">Nivel 1 - Bebé</p>
+                        </div>
+                    </div>
+
+                    <div class="pet-stats-card card">
+                        <h3>Estado</h3>
+                        <div class="stat-bar">
+                            <label>Salud</label>
+                            <div class="bar">
+                                <div id="pet-health-bar" class="fill health" style="width: 100%"></div>
+                            </div>
+                        </div>
+                        <div class="stat-bar">
+                            <label>Hambre</label>
+                            <div class="bar">
+                                <div id="pet-hunger-bar" class="fill hunger" style="width: 20%"></div>
+                            </div>
+                        </div>
+                        <div class="stat-bar">
+                            <label>Experiencia</label>
+                            <div class="bar">
+                                <div id="pet-exp-bar" class="fill exp" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <div class="pet-actions">
+                            <div class="inventory">
+                                <span class="icon">🍱</span>
+                                <span id="food-count">5</span> Galletas
+                            </div>
+                            <button id="btn-feed-pet" class="btn btn-primary btn-lg">Alimentar</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ASSISTANT VIEW -->
+            <section id="view-assistant" class="view hidden">
+                <div class="chat-container">
+                    <div id="chat-messages" class="chat-messages">
+                        <div class="message assistant">
+                            ¡Hola! Soy tu asistente de metas. ¿Qué te gustaría lograr hoy?
+                            Puedes decirme algo como "Quiero leer 20 páginas al día" o "Ahorrar $500 en 3 meses".
+                        </div>
+                    </div>
+                    <div class="chat-input-area">
+                        <input type="text" id="chat-input" placeholder="Escribe tu meta o pregunta..." />
+                        <button id="btn-send-chat" class="btn btn-primary">Enviar</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SETTINGS VIEW -->
+            <section id="view-settings" class="view hidden">
+                <div class="card">
+                    <h3>Personalización</h3>
+                    <div class="form-field">
+                        <label>Tema</label>
+                        <select id="select-theme" class="input-field">
+                            <option value="light">Claro</option>
+                            <option value="dark">Oscuro</option>
+                        </select>
+                    </div>
+                    <div class="notice">
+                        <p>IA conectada vía MetaLogic Secure Backend.</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- MODAL: NUEVA META -->
+        <div id="modal-goal" class="modal-backdrop hidden">
+            <div class="modal-card">
+                <header class="modal-header">
+                    <h3 class="modal-title">Crear nueva meta</h3>
+                    <button class="modal-close">&times;</button>
+                </header>
+                <div class="modal-body">
+                    <div class="form-field">
+                        <label>Tipo de meta</label>
+                        <select id="goal-type-select" class="input-field">
+                            <option value="habit">Hábito recurrente</option>
+                            <option value="quantitative">Meta numérica (Ahorro, lectura...)</option>
+                            <option value="project">Proyecto con hitos</option>
+                        </select>
+                    </div>
+                    <!-- Campos dinámicos según el tipo se inyectarán aquí -->
+                    <div id="dynamic-goal-fields"></div>
+                </div>
+                <footer class="modal-footer">
+                    <button class="btn btn-secondary btn-cancel">Cancelar</button>
+                    <button id="btn-save-goal" class="btn btn-primary">Crear Meta</button>
+                </footer>
+            </div>
         </div>
-        <nav class="sidebar-nav">
-            <button class="nav-btn active" data-view="dashboard">
-                <span class="icon">📊</span> Dashboard
-            </button>
-            <button class="nav-btn" data-view="pet">
-                <span class="icon">🥚</span> Mascota
-            </button>
-            <button class="nav-btn" data-view="assistant">
-                <span class="icon">💬</span> Asistente IA
-            </button>
-            <button class="nav-btn" data-view="settings">
-                <span class="icon">⚙️</span> Ajustes
-            </button>
-        </nav>
-    </aside>
 
-    <main class="main-content">
-        <header class="top-bar">
-            <h1 id="view-title">Mi Dashboard</h1>
-            <div class="top-actions">
-                <button id="btn-new-goal" class="btn btn-primary">+ Nueva Meta</button>
+        <!-- Scripts using module type -->
+        <script type="module" src="js/main.js"></script>
+    </body>
+
+    </html>
+    =======
+    <!DOCTYPE html>
+    <html lang="es">
+
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Goal Tracker - Progreso de metas</title>
+        <link rel="stylesheet" href="styles.css">
+        <!-- Fuente Nunito para el look "Friendly" -->
+        <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+    </head>
+
+    <body>
+
+        <header class="app-header">
+            <div class="container">
+                <h1>Goal Tracker</h1>
             </div>
         </header>
 
-        <!-- DASHBOARD VIEW -->
-        <section id="view-dashboard" class="view">
-            <div class="stats-overview">
-                <div class="mini-card">
-                    <span class="label">Activas</span>
-                    <strong id="stat-active-count">0</strong>
-                </div>
-                <div class="mini-card">
-                    <span class="label">Racha Global</span>
-                    <strong id="stat-global-streak">0 días</strong>
-                </div>
-                <div class="mini-card">
-                    <span class="label">Completadas</span>
-                    <strong id="stat-completed-count">0</strong>
-                </div>
-            </div>
+        <main class="container">
 
-            <div id="goals-grid" class="goals-grid">
-                <!-- Goal cards injectadas dinámicamente -->
-                <div class="empty-state">
-                    <p>No tienes metas activas. ¡Habla con el asistente para crear una!</p>
-                </div>
-            </div>
-        </section>
+            <!-- DASHBOARD GRID -->
+            <div class="dashboard-grid">
 
-        <!-- PET VIEW -->
-        <section id="view-pet" class="view hidden">
-            <div class="pet-dashboard">
-                <div class="pet-visual-card card">
-                    <div id="pet-container" class="pet-container">
-                        <!-- SVG Pet injected here -->
-                    </div>
-                    <div class="pet-info">
-                        <h2 id="pet-name-display">MetaPet</h2>
-                        <p id="pet-stage-display">Nivel 1 - Bebé</p>
-                    </div>
-                </div>
+                <!-- Tarjeta del Proyecto Activo -->
+                <section class="card project-card">
+                    <header class="card-header">
+                        <h2 class="card-title">Proyecto Activo</h2>
+                        <span class="badge">En curso</span>
+                    </header>
 
-                <div class="pet-stats-card card">
-                    <h3>Estado</h3>
-                    <div class="stat-bar">
-                        <label>Salud</label>
-                        <div class="bar">
-                            <div id="pet-health-bar" class="fill health" style="width: 100%"></div>
+                    <div class="project-info">
+                        <h3 id="project-name" class="project-name">Cargando...</h3>
+
+                        <div class="progress-container">
+                            <div class="progress-labels">
+                                <span id="words-progress">0 / 0 sesiones</span>
+                                <span id="percent-progress" class="percent">0%</span>
+                            </div>
+                            <div class="progress-bar-track">
+                                <div id="progress-bar-fill" class="progress-bar-fill" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <div class="eta-box">
+                            <span class="eta-label">Fecha estimada de finalización</span>
+                            <div id="eta-date" class="eta-value">Calculando...</div>
                         </div>
                     </div>
-                    <div class="stat-bar">
-                        <label>Hambre</label>
-                        <div class="bar">
-                            <div id="pet-hunger-bar" class="fill hunger" style="width: 20%"></div>
+                </section>
+
+                <!-- Resumen Semanal -->
+                <section class="card weekly-card">
+                    <header class="card-header">
+                        <h2 class="card-title">Resumen Semanal</h2>
+                    </header>
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <span class="stat-label">Sesiones</span>
+                            <strong id="weekly-sessions" class="stat-value">--</strong>
+                            <span class="stat-sub">Hechas vs Planeadas</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Tiempo</span>
+                            <strong id="weekly-time" class="stat-value">--</strong>
+                            <span class="stat-sub">Acumulado</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Producción</span>
+                            <strong id="weekly-units" class="stat-value">--</strong>
+                            <span id="weekly-units-label" class="stat-sub">Avance</span>
                         </div>
                     </div>
-                    <div class="stat-bar">
-                        <label>Experiencia</label>
-                        <div class="bar">
-                            <div id="pet-exp-bar" class="fill exp" style="width: 0%"></div>
-                        </div>
-                    </div>
-
-                    <div class="pet-actions">
-                        <div class="inventory">
-                            <span class="icon">🍱</span>
-                            <span id="food-count">5</span> Galletas
-                        </div>
-                        <button id="btn-feed-pet" class="btn btn-primary btn-lg">Alimentar</button>
-                    </div>
-                </div>
+                </section>
             </div>
-        </section>
 
-        <!-- ASSISTANT VIEW -->
-        <section id="view-assistant" class="view hidden">
-            <div class="chat-container">
-                <div id="chat-messages" class="chat-messages">
-                    <div class="message assistant">
-                        ¡Hola! Soy tu asistente de metas. ¿Qué te gustaría lograr hoy?
-                        Puedes decirme algo como "Quiero leer 20 páginas al día" o "Ahorrar $500 en 3 meses".
-                    </div>
-                </div>
-                <div class="chat-input-area">
-                    <input type="text" id="chat-input" placeholder="Escribe tu meta o pregunta..." />
-                    <button id="btn-send-chat" class="btn btn-primary">Enviar</button>
-                </div>
-            </div>
-        </section>
-
-        <!-- SETTINGS VIEW -->
-        <section id="view-settings" class="view hidden">
-            <div class="card">
-                <h3>Personalización</h3>
-                <div class="form-field">
-                    <label>Tema</label>
-                    <select id="select-theme" class="input-field">
-                        <option value="light">Claro</option>
-                        <option value="dark">Oscuro</option>
-                    </select>
-                </div>
-                <div class="notice">
-                    <p>IA conectada vía MetaLogic Secure Backend.</p>
-                </div>
-            </div>
-        </section>
-    </main>
-
-    <!-- MODAL: NUEVA META -->
-    <div id="modal-goal" class="modal-backdrop hidden">
-        <div class="modal-card">
-            <header class="modal-header">
-                <h3 class="modal-title">Crear nueva meta</h3>
-                <button class="modal-close">&times;</button>
-            </header>
-            <div class="modal-body">
-                <div class="form-field">
-                    <label>Tipo de meta</label>
-                    <select id="goal-type-select" class="input-field">
-                        <option value="habit">Hábito recurrente</option>
-                        <option value="quantitative">Meta numérica (Ahorro, lectura...)</option>
-                        <option value="project">Proyecto con hitos</option>
-                    </select>
-                </div>
-                <!-- Campos dinámicos según el tipo se inyectarán aquí -->
-                <div id="dynamic-goal-fields"></div>
-            </div>
-            <footer class="modal-footer">
-                <button class="btn btn-secondary btn-cancel">Cancelar</button>
-                <button id="btn-save-goal" class="btn btn-primary">Crear Meta</button>
-            </footer>
-        </div>
-    </div>
-
-    <!-- Scripts using module type -->
-    <script type="module" src="js/main.js"></script>
-</body>
-
-</html>
-=======
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Goal Tracker - Progreso de metas</title>
-    <link rel="stylesheet" href="styles.css">
-    <!-- Fuente Nunito para el look "Friendly" -->
-    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
-</head>
-<body>
-
-    <header class="app-header">
-        <div class="container">
-            <h1>Goal Tracker</h1>
-        </div>
-    </header>
-
-    <main class="container">
-        
-        <!-- DASHBOARD GRID -->
-        <div class="dashboard-grid">
-            
-            <!-- Tarjeta del Proyecto Activo -->
-            <section class="card project-card">
+            <!-- DASHBOARD MODES -->
+            <section class="card dashboard-modes-card">
                 <header class="card-header">
-                    <h2 class="card-title">Proyecto Activo</h2>
-                    <span class="badge">En curso</span>
+                    <div>
+                        <h2 class="card-title">Dashboard</h2>
+                        <p class="card-subtitle">Elige cómo quieres ver tu progreso.</p>
+                    </div>
+                    <div class="dashboard-toggle" role="tablist" aria-label="Modos de dashboard">
+                        <button id="btn-dashboard-vision" class="btn btn-sm btn-secondary is-active"
+                            type="button">Visión</button>
+                        <button id="btn-dashboard-today" class="btn btn-sm btn-secondary" type="button">Hoy</button>
+                    </div>
                 </header>
-                
-                <div class="project-info">
-                    <h3 id="project-name" class="project-name">Cargando...</h3>
-                    
-                    <div class="progress-container">
-                        <div class="progress-labels">
-                            <span id="words-progress">0 / 0 sesiones</span>
-                            <span id="percent-progress" class="percent">0%</span>
-                        </div>
-                        <div class="progress-bar-track">
-                            <div id="progress-bar-fill" class="progress-bar-fill" style="width: 0%"></div>
-                        </div>
-                    </div>
+                <div id="dashboard-vision" class="dashboard-mode-panel is-active"></div>
+                <div id="dashboard-today" class="dashboard-mode-panel"></div>
+            </section>
 
-                    <div class="eta-box">
-                        <span class="eta-label">Fecha estimada de finalización</span>
-                        <div id="eta-date" class="eta-value">Calculando...</div>
-                    </div>
+            <!-- SMART CREATE -->
+            <section class="card smart-create-card">
+                <header class="card-header">
+                    <h2 class="card-title">Crea tu próxima meta</h2>
+                </header>
+                <div class="smart-create-body">
+                    <textarea id="smart-intent-input" class="input-field smart-create-input" rows="2"
+                        placeholder="¿Qué quieres lograr?"></textarea>
+                    <button id="btn-smart-continue" class="btn btn-primary btn-lg">Continuar</button>
+                    <div id="smart-create-message" class="smart-create-message"></div>
                 </div>
             </section>
 
-            <!-- Resumen Semanal -->
-            <section class="card weekly-card">
-                <header class="card-header">
-                    <h2 class="card-title">Resumen Semanal</h2>
-                </header>
-                <div class="stats-grid">
-                    <div class="stat-item">
-                        <span class="stat-label">Sesiones</span>
-                        <strong id="weekly-sessions" class="stat-value">--</strong>
-                        <span class="stat-sub">Hechas vs Planeadas</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Tiempo</span>
-                        <strong id="weekly-time" class="stat-value">--</strong>
-                        <span class="stat-sub">Acumulado</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Producción</span>
-                        <strong id="weekly-units" class="stat-value">--</strong>
-                        <span id="weekly-units-label" class="stat-sub">Avance</span>
-                    </div>
-                </div>
-            </section>
-        </div>
-
-        <!-- DASHBOARD MODES -->
-        <section class="card dashboard-modes-card">
-            <header class="card-header">
-                <div>
-                    <h2 class="card-title">Dashboard</h2>
-                    <p class="card-subtitle">Elige cómo quieres ver tu progreso.</p>
-                </div>
-                <div class="dashboard-toggle" role="tablist" aria-label="Modos de dashboard">
-                    <button id="btn-dashboard-vision" class="btn btn-sm btn-secondary is-active" type="button">Visión</button>
-                    <button id="btn-dashboard-today" class="btn btn-sm btn-secondary" type="button">Hoy</button>
-                </div>
-            </header>
-            <div id="dashboard-vision" class="dashboard-mode-panel is-active"></div>
-            <div id="dashboard-today" class="dashboard-mode-panel"></div>
-        </section>
-
-        <!-- SMART CREATE -->
-        <section class="card smart-create-card">
-            <header class="card-header">
-                <h2 class="card-title">Crea tu próxima meta</h2>
-            </header>
-            <div class="smart-create-body">
-                <textarea id="smart-intent-input" class="input-field smart-create-input" rows="2" placeholder="¿Qué quieres lograr?"></textarea>
-                <button id="btn-smart-continue" class="btn btn-primary btn-lg">Continuar</button>
-                <div id="smart-create-message" class="smart-create-message"></div>
-            </div>
-        </section>
-
-        <!-- ACCIONES -->
-        <section class="actions-section">
-            <button id="btn-log-session" class="btn btn-primary btn-lg">
-                <span class="icon">✎</span> Registrar sesión
-            </button>
-            <button id="btn-explore-scenarios" class="btn btn-secondary">
-                Explorar escenarios
-            </button>
-        </section>
-
-        <!-- ESCENARIOS -->
-        <section id="scenarios-section" class="scenarios-section">
-            <h2 class="section-title">¿Y si cambias el ritmo?</h2>
-            <div class="scenarios-grid">
-                <div class="card scenario-card">
-                    <div class="scenario-icon">☕</div>
-                    <h3>Relajado</h3>
-                    <p class="scenario-desc">-20% intensidad</p>
-                    <div class="scenario-date">25 Jun</div>
-                </div>
-                
-                <div class="card scenario-card active">
-                    <div class="scenario-icon">🔥</div>
-                    <h3>Ritmo Actual</h3>
-                    <p class="scenario-desc">Basado en tu histórico</p>
-                    <div class="scenario-date">20 May</div>
-                </div>
-
-                <div class="card scenario-card">
-                    <div class="scenario-icon">🚀</div>
-                    <h3>Ambicioso</h3>
-                    <p class="scenario-desc">+20% intensidad</p>
-                    <div class="scenario-date">10 Abr</div>
-                </div>
-            </div>
-        </section>
-
-        <!-- AJUSTES -->
-        <section class="card settings-card">
-            <header class="card-header">
-                <h2 class="card-title">Tu forma de trabajar</h2>
-                <button id="btn-open-project-wizard" class="btn btn-sm btn-secondary">
-                    ⚙ Configurar
+            <!-- ACCIONES -->
+            <section class="actions-section">
+                <button id="btn-log-session" class="btn btn-primary btn-lg">
+                    <span class="icon">✎</span> Registrar sesión
                 </button>
-            </header>
-            <div class="settings-grid">
-                <div class="setting-item">
-                    <label>Meta del proyecto</label>
-                    <div id="setting-goal" class="setting-value">--</div>
+                <button id="btn-explore-scenarios" class="btn btn-secondary">
+                    Explorar escenarios
+                </button>
+            </section>
+
+            <!-- ESCENARIOS -->
+            <section id="scenarios-section" class="scenarios-section">
+                <h2 class="section-title">¿Y si cambias el ritmo?</h2>
+                <div class="scenarios-grid">
+                    <div class="card scenario-card">
+                        <div class="scenario-icon">☕</div>
+                        <h3>Relajado</h3>
+                        <p class="scenario-desc">-20% intensidad</p>
+                        <div class="scenario-date">25 Jun</div>
+                    </div>
+
+                    <div class="card scenario-card active">
+                        <div class="scenario-icon">🔥</div>
+                        <h3>Ritmo Actual</h3>
+                        <p class="scenario-desc">Basado en tu histórico</p>
+                        <div class="scenario-date">20 May</div>
+                    </div>
+
+                    <div class="card scenario-card">
+                        <div class="scenario-icon">🚀</div>
+                        <h3>Ambicioso</h3>
+                        <p class="scenario-desc">+20% intensidad</p>
+                        <div class="scenario-date">10 Abr</div>
+                    </div>
                 </div>
-                <div class="setting-item">
-                    <label>Días de escritura</label>
-                    <div id="setting-days" class="setting-value">--</div>
+            </section>
+
+            <!-- AJUSTES -->
+            <section class="card settings-card">
+                <header class="card-header">
+                    <h2 class="card-title">Tu forma de trabajar</h2>
+                    <button id="btn-open-project-wizard" class="btn btn-sm btn-secondary">
+                        ⚙ Configurar
+                    </button>
+                </header>
+                <div class="settings-grid">
+                    <div class="setting-item">
+                        <label>Meta del proyecto</label>
+                        <div id="setting-goal" class="setting-value">--</div>
+                    </div>
+                    <div class="setting-item">
+                        <label>Días de escritura</label>
+                        <div id="setting-days" class="setting-value">--</div>
+                    </div>
+                    <div class="setting-item">
+                        <label>Horas por sesión</label>
+                        <div id="setting-hours" class="setting-value">--</div>
+                    </div>
+                    <div class="setting-item">
+                        <label>Avance por hora (Est.)</label>
+                        <div id="setting-wph" class="setting-value">--</div>
+                    </div>
                 </div>
-                <div class="setting-item">
-                    <label>Horas por sesión</label>
-                    <div id="setting-hours" class="setting-value">--</div>
+            </section>
+
+        </main>
+
+        <footer class="app-footer">
+            <p>&copy; 2023 Goal Tracker MVP</p>
+        </footer>
+
+        <!-- MODAL REGISTRAR SESIÓN -->
+        <div id="modal-log-session" class="modal-backdrop hidden">
+            <div class="modal-card">
+                <header class="modal-header">
+                    <h3 class="modal-title">Registrar sesión</h3>
+                    <button id="btn-close-modal" class="modal-close">&times;</button>
+                </header>
+
+                <div class="modal-body">
+                    <div class="form-field">
+                        <label for="input-hours">Tiempo dedicado (horas)</label>
+                        <input id="input-hours" type="number" step="0.25" min="0" class="input-field"
+                            placeholder="Ej: 1.5">
+                    </div>
+
+                    <div class="form-field">
+                        <label for="input-words">Avance (opcional)</label>
+                        <input id="input-words" type="number" min="0" class="input-field" placeholder="Opcional">
+                        <small class="hint">Si lo dejas vacío, lo calculamos por ti.</small>
+                    </div>
                 </div>
-                <div class="setting-item">
-                    <label>Avance por hora (Est.)</label>
-                    <div id="setting-wph" class="setting-value">--</div>
-                </div>
+
+                <footer class="modal-footer">
+                    <button id="btn-cancel-session" class="btn btn-secondary">Cancelar</button>
+                    <button id="btn-save-session" class="btn btn-primary">Guardar</button>
+                </footer>
             </div>
-        </section>
-
-    </main>
-
-    <footer class="app-footer">
-        <p>&copy; 2023 Goal Tracker MVP</p>
-    </footer>
-
-    <!-- MODAL REGISTRAR SESIÓN -->
-    <div id="modal-log-session" class="modal-backdrop hidden">
-        <div class="modal-card">
-            <header class="modal-header">
-                <h3 class="modal-title">Registrar sesión</h3>
-                <button id="btn-close-modal" class="modal-close">&times;</button>
-            </header>
-            
-            <div class="modal-body">
-                <div class="form-field">
-                    <label for="input-hours">Tiempo dedicado (horas)</label>
-                    <input id="input-hours" type="number" step="0.25" min="0" class="input-field" placeholder="Ej: 1.5">
-                </div>
-
-                <div class="form-field">
-                    <label for="input-words">Avance (opcional)</label>
-                    <input id="input-words" type="number" min="0" class="input-field" placeholder="Opcional">
-                    <small class="hint">Si lo dejas vacío, lo calculamos por ti.</small>
-                </div>
-            </div>
-
-            <footer class="modal-footer">
-                <button id="btn-cancel-session" class="btn btn-secondary">Cancelar</button>
-                <button id="btn-save-session" class="btn btn-primary">Guardar</button>
-            </footer>
         </div>
-    </div>
 
-    <!-- MODAL CONFIGURAR PROYECTO -->
-    <div id="modal-project" class="modal-backdrop hidden">
-        <div class="modal-card">
-            <header class="modal-header">
-                <h3 class="modal-title">Wizard de Meta</h3>
-                <button id="btn-close-project-modal" class="modal-close">&times;</button>
-            </header>
-    
-            <div class="modal-body">
-                <div class="wizard-progress">
-                    <span id="wizard-step-label" class="wizard-step-label">Paso 1/6</span>
-                    <div id="wizard-dots" class="wizard-dots"></div>
+        <!-- MODAL CONFIGURAR PROYECTO -->
+        <div id="modal-project" class="modal-backdrop hidden">
+            <div class="modal-card">
+                <header class="modal-header">
+                    <h3 class="modal-title">Wizard de Meta</h3>
+                    <button id="btn-close-project-modal" class="modal-close">&times;</button>
+                </header>
+
+                <div class="modal-body">
+                    <div class="wizard-progress">
+                        <span id="wizard-step-label" class="wizard-step-label">Paso 1/6</span>
+                        <div id="wizard-dots" class="wizard-dots"></div>
+                    </div>
+
+                    <div id="wizard-steps" class="wizard-steps"></div>
                 </div>
 
-                <div id="wizard-steps" class="wizard-steps"></div>
+                <footer class="modal-footer">
+                    <button id="btn-cancel-project" class="btn btn-secondary">Cancelar</button>
+                    <button id="btn-wizard-back" class="btn btn-secondary">Atrás</button>
+                    <button id="btn-wizard-next" class="btn btn-primary">Siguiente</button>
+                    <button id="btn-wizard-finish" class="btn btn-primary">Crear Meta</button>
+                </footer>
             </div>
-    
-            <footer class="modal-footer">
-                <button id="btn-cancel-project" class="btn btn-secondary">Cancelar</button>
-                <button id="btn-wizard-back" class="btn btn-secondary">Atrás</button>
-                <button id="btn-wizard-next" class="btn btn-primary">Siguiente</button>
-                <button id="btn-wizard-finish" class="btn btn-primary">Crear Meta</button>
-            </footer>
         </div>
-    </div>
 
-    <script type="module" src="src/main.js"></script>
-</body>
-</html>
->>>>>>> f7bc5e2938ae246765cb4e577e22e14cdc0b5462
+        <script type="module" src="src/main.js"></script>
+    </body>
+
+    </html>
+    >>>>>>> f7bc5e2938ae246765cb4e577e22e14cdc0b5462
