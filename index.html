@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 <!DOCTYPE html>
 <html lang="es">
 
@@ -176,3 +177,236 @@
 </body>
 
 </html>
+=======
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Goal Tracker - Progreso de metas</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Fuente Nunito para el look "Friendly" -->
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <header class="app-header">
+        <div class="container">
+            <h1>Goal Tracker</h1>
+        </div>
+    </header>
+
+    <main class="container">
+        
+        <!-- DASHBOARD GRID -->
+        <div class="dashboard-grid">
+            
+            <!-- Tarjeta del Proyecto Activo -->
+            <section class="card project-card">
+                <header class="card-header">
+                    <h2 class="card-title">Proyecto Activo</h2>
+                    <span class="badge">En curso</span>
+                </header>
+                
+                <div class="project-info">
+                    <h3 id="project-name" class="project-name">Cargando...</h3>
+                    
+                    <div class="progress-container">
+                        <div class="progress-labels">
+                            <span id="words-progress">0 / 0 sesiones</span>
+                            <span id="percent-progress" class="percent">0%</span>
+                        </div>
+                        <div class="progress-bar-track">
+                            <div id="progress-bar-fill" class="progress-bar-fill" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <div class="eta-box">
+                        <span class="eta-label">Fecha estimada de finalización</span>
+                        <div id="eta-date" class="eta-value">Calculando...</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Resumen Semanal -->
+            <section class="card weekly-card">
+                <header class="card-header">
+                    <h2 class="card-title">Resumen Semanal</h2>
+                </header>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-label">Sesiones</span>
+                        <strong id="weekly-sessions" class="stat-value">--</strong>
+                        <span class="stat-sub">Hechas vs Planeadas</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Tiempo</span>
+                        <strong id="weekly-time" class="stat-value">--</strong>
+                        <span class="stat-sub">Acumulado</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Producción</span>
+                        <strong id="weekly-units" class="stat-value">--</strong>
+                        <span id="weekly-units-label" class="stat-sub">Avance</span>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- DASHBOARD MODES -->
+        <section class="card dashboard-modes-card">
+            <header class="card-header">
+                <div>
+                    <h2 class="card-title">Dashboard</h2>
+                    <p class="card-subtitle">Elige cómo quieres ver tu progreso.</p>
+                </div>
+                <div class="dashboard-toggle" role="tablist" aria-label="Modos de dashboard">
+                    <button id="btn-dashboard-vision" class="btn btn-sm btn-secondary is-active" type="button">Visión</button>
+                    <button id="btn-dashboard-today" class="btn btn-sm btn-secondary" type="button">Hoy</button>
+                </div>
+            </header>
+            <div id="dashboard-vision" class="dashboard-mode-panel is-active"></div>
+            <div id="dashboard-today" class="dashboard-mode-panel"></div>
+        </section>
+
+        <!-- SMART CREATE -->
+        <section class="card smart-create-card">
+            <header class="card-header">
+                <h2 class="card-title">Crea tu próxima meta</h2>
+            </header>
+            <div class="smart-create-body">
+                <textarea id="smart-intent-input" class="input-field smart-create-input" rows="2" placeholder="¿Qué quieres lograr?"></textarea>
+                <button id="btn-smart-continue" class="btn btn-primary btn-lg">Continuar</button>
+                <div id="smart-create-message" class="smart-create-message"></div>
+            </div>
+        </section>
+
+        <!-- ACCIONES -->
+        <section class="actions-section">
+            <button id="btn-log-session" class="btn btn-primary btn-lg">
+                <span class="icon">✎</span> Registrar sesión
+            </button>
+            <button id="btn-explore-scenarios" class="btn btn-secondary">
+                Explorar escenarios
+            </button>
+        </section>
+
+        <!-- ESCENARIOS -->
+        <section id="scenarios-section" class="scenarios-section">
+            <h2 class="section-title">¿Y si cambias el ritmo?</h2>
+            <div class="scenarios-grid">
+                <div class="card scenario-card">
+                    <div class="scenario-icon">☕</div>
+                    <h3>Relajado</h3>
+                    <p class="scenario-desc">-20% intensidad</p>
+                    <div class="scenario-date">25 Jun</div>
+                </div>
+                
+                <div class="card scenario-card active">
+                    <div class="scenario-icon">🔥</div>
+                    <h3>Ritmo Actual</h3>
+                    <p class="scenario-desc">Basado en tu histórico</p>
+                    <div class="scenario-date">20 May</div>
+                </div>
+
+                <div class="card scenario-card">
+                    <div class="scenario-icon">🚀</div>
+                    <h3>Ambicioso</h3>
+                    <p class="scenario-desc">+20% intensidad</p>
+                    <div class="scenario-date">10 Abr</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- AJUSTES -->
+        <section class="card settings-card">
+            <header class="card-header">
+                <h2 class="card-title">Tu forma de trabajar</h2>
+                <button id="btn-open-project-wizard" class="btn btn-sm btn-secondary">
+                    ⚙ Configurar
+                </button>
+            </header>
+            <div class="settings-grid">
+                <div class="setting-item">
+                    <label>Meta del proyecto</label>
+                    <div id="setting-goal" class="setting-value">--</div>
+                </div>
+                <div class="setting-item">
+                    <label>Días de escritura</label>
+                    <div id="setting-days" class="setting-value">--</div>
+                </div>
+                <div class="setting-item">
+                    <label>Horas por sesión</label>
+                    <div id="setting-hours" class="setting-value">--</div>
+                </div>
+                <div class="setting-item">
+                    <label>Avance por hora (Est.)</label>
+                    <div id="setting-wph" class="setting-value">--</div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="app-footer">
+        <p>&copy; 2023 Goal Tracker MVP</p>
+    </footer>
+
+    <!-- MODAL REGISTRAR SESIÓN -->
+    <div id="modal-log-session" class="modal-backdrop hidden">
+        <div class="modal-card">
+            <header class="modal-header">
+                <h3 class="modal-title">Registrar sesión</h3>
+                <button id="btn-close-modal" class="modal-close">&times;</button>
+            </header>
+            
+            <div class="modal-body">
+                <div class="form-field">
+                    <label for="input-hours">Tiempo dedicado (horas)</label>
+                    <input id="input-hours" type="number" step="0.25" min="0" class="input-field" placeholder="Ej: 1.5">
+                </div>
+
+                <div class="form-field">
+                    <label for="input-words">Avance (opcional)</label>
+                    <input id="input-words" type="number" min="0" class="input-field" placeholder="Opcional">
+                    <small class="hint">Si lo dejas vacío, lo calculamos por ti.</small>
+                </div>
+            </div>
+
+            <footer class="modal-footer">
+                <button id="btn-cancel-session" class="btn btn-secondary">Cancelar</button>
+                <button id="btn-save-session" class="btn btn-primary">Guardar</button>
+            </footer>
+        </div>
+    </div>
+
+    <!-- MODAL CONFIGURAR PROYECTO -->
+    <div id="modal-project" class="modal-backdrop hidden">
+        <div class="modal-card">
+            <header class="modal-header">
+                <h3 class="modal-title">Wizard de Meta</h3>
+                <button id="btn-close-project-modal" class="modal-close">&times;</button>
+            </header>
+    
+            <div class="modal-body">
+                <div class="wizard-progress">
+                    <span id="wizard-step-label" class="wizard-step-label">Paso 1/6</span>
+                    <div id="wizard-dots" class="wizard-dots"></div>
+                </div>
+
+                <div id="wizard-steps" class="wizard-steps"></div>
+            </div>
+    
+            <footer class="modal-footer">
+                <button id="btn-cancel-project" class="btn btn-secondary">Cancelar</button>
+                <button id="btn-wizard-back" class="btn btn-secondary">Atrás</button>
+                <button id="btn-wizard-next" class="btn btn-primary">Siguiente</button>
+                <button id="btn-wizard-finish" class="btn btn-primary">Crear Meta</button>
+            </footer>
+        </div>
+    </div>
+
+    <script type="module" src="src/main.js"></script>
+</body>
+</html>
+>>>>>>> f7bc5e2938ae246765cb4e577e22e14cdc0b5462
